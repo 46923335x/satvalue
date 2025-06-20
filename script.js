@@ -30,7 +30,7 @@ function drawChart(labels, data) {
         {
           label: "BTC (Sats) per USD",
           data: data,
-          borderColor: "blue",
+          borderColor: "#f7931a",
           fill: false,
           tension: 0.3,
         },

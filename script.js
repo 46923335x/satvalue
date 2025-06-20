@@ -28,7 +28,7 @@ function drawChart(labels, data) {
       labels: labels,
       datasets: [
         {
-          label: "BTC per USD (inverted)",
+          label: "BTC (Sats) per USD",
           data: data,
           borderColor: "blue",
           fill: false,

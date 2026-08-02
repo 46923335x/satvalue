@@ -156,6 +156,49 @@ class PortfolioValidationError(MarketDataError):
     pass
 
 
+def read_request_body(headers, stream, max_bytes: int) -> bytes:
+    """Read a bounded HTTP request body from fixed-length or chunked requests."""
+    length_header = headers.get("Content-Length")
+    if length_header:
+        length = int(length_header)
+        if not 0 < length <= max_bytes:
+            raise MarketDataError("Request body is empty or too large.")
+        body = stream.read(length)
+        if len(body) != length:
+            raise MarketDataError("Request body is incomplete.")
+        return body
+
+    transfer_encoding = str(headers.get("Transfer-Encoding", "")).lower()
+    if "chunked" not in transfer_encoding:
+        raise MarketDataError("Request body is empty or too large.")
+
+    body = bytearray()
+    while True:
+        size_line = stream.readline(128)
+        if not size_line:
+            raise MarketDataError("Request body is incomplete.")
+        try:
+            chunk_size = int(size_line.split(b";", 1)[0].strip(), 16)
+        except ValueError as exc:
+            raise MarketDataError("Request body is invalid.") from exc
+        if chunk_size == 0:
+            while True:
+                trailer = stream.readline(8192)
+                if trailer in {b"\r\n", b"\n", b""}:
+                    break
+            break
+        if chunk_size < 0 or len(body) + chunk_size > max_bytes:
+            raise MarketDataError("Request body is empty or too large.")
+        chunk = stream.read(chunk_size)
+        if len(chunk) != chunk_size or stream.read(2) != b"\r\n":
+            raise MarketDataError("Request body is incomplete.")
+        body.extend(chunk)
+
+    if not body:
+        raise MarketDataError("Request body is empty or too large.")
+    return bytes(body)
+
+
 def alpaca_headers() -> dict[str, str]:
     key_id = os.environ.get("ALPACA_API_KEY_ID")
     secret_key = os.environ.get("ALPACA_API_SECRET_KEY")
@@ -1177,10 +1220,7 @@ class SatValueHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/portfolio":
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 16384:
-                    raise MarketDataError("Portfolio request is empty or too large.")
-                payload = json.loads(self.rfile.read(length))
+                payload = json.loads(read_request_body(self.headers, self.rfile, 16384))
                 if not isinstance(payload, dict):
                     raise MarketDataError("Portfolio request must be a JSON object.")
                 self.send_json(cached_portfolio_payload(payload))
@@ -1195,10 +1235,9 @@ class SatValueHandler(SimpleHTTPRequestHandler):
             self.send_error(HTTPStatus.NOT_FOUND.value)
             return
         try:
-            length = min(int(self.headers.get("Content-Length", "0")), 2048)
-            payload = json.loads(self.rfile.read(length) or b"{}")
+            payload = json.loads(read_request_body(self.headers, self.rfile, 2048))
             page = str(payload.get("page", "unknown"))[:100]
-        except (ValueError, json.JSONDecodeError):
+        except (ValueError, json.JSONDecodeError, MarketDataError):
             page = "unknown"
         with _cache_lock:
             _analytics[page] = _analytics.get(page, 0) + 1

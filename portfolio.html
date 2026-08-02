@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Backtest a weighted US stock or ETF portfolio in Bitcoin terms with completed daily market data.">
+  <title>Backtest Portfolio Asset Allocation | SatValue</title>
+  <link rel="stylesheet" href="style.css?v=20260802-23">
+  <link rel="icon" href="favicon.ico">
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body data-page="portfolio" class="portfolio-page">
+  <nav class="navbar" aria-label="Primary navigation">
+    <div class="nav-left"><a class="logo-link" href="index.html"><img class="logo-mark" src="SV_Logo.PNG" alt="SatValue logo"><span class="logo">SatValue.com</span></a></div>
+    <div class="nav-links">
+      <div class="dropdown dropdown-menu dropdown-split" id="sectorsDropdown"><a class="nav-link-direct nav-split-link" href="sectors.html">Sectors</a><button class="dropdown-icon-toggle" id="sectorsToggle" type="button" aria-label="Open sectors menu" aria-expanded="false">▼</button><div class="dropdown-panel" id="sectorsMenu"></div></div>
+      <div class="dropdown dropdown-menu dropdown-split" id="assetClassesDropdown"><a class="nav-link-direct nav-split-link" href="asset-classes.html">Asset Classes</a><button class="dropdown-icon-toggle" id="assetClassesToggle" type="button" aria-label="Open asset classes menu" aria-expanded="false">▼</button><div class="dropdown-panel" id="assetClassesMenu"></div></div>
+      <a class="nav-link-direct" href="countries.html">Countries</a>
+      <a class="nav-link-direct is-current" href="portfolio.html">Portfolio</a>
+    </div>
+    <form class="nav-search" role="search"><input class="search-input" name="symbol" aria-label="Ticker symbol" placeholder="Enter a ticker" maxlength="10" autocomplete="off" required><button class="search-button" type="submit">Search</button></form>
+  </nav>
+
+  <main class="portfolio-workspace">
+    <button class="portfolio-config-toggle" id="portfolioConfigToggle" type="button" aria-expanded="true" aria-controls="portfolioBuilder"><span>Customize Data</span><span aria-hidden="true" class="config-chevron">⌃</span></button>
+
+    <section class="portfolio-intro">
+      <h1>Backtest Portfolio Asset Allocation</h1>
+      <div class="section-rule"></div>
+      <h2>Portfolio Backtesting Overview</h2>
+      <p>Construct a portfolio from US stocks and ETFs, select a rebalancing strategy, and analyze historical returns, risk, and drawdowns. Compare it with up to five stock or ETF benchmark tickers using shared completed daily observations, with every series denominated in Bitcoin.</p>
+      <p>Results use a 10 BTC starting balance and include BTC-denominated portfolio value, cumulative and rolling returns, calendar performance, and risk statistics.</p>
+    </section>
+
+    <section class="portfolio-builder portfolio-config-panel" id="portfolioBuilder" aria-labelledby="portfolioBuilderTitle">
+      <div class="config-panel-header"><h2 id="portfolioBuilderTitle">Portfolio Model Configuration</h2></div>
+      <form id="portfolioForm">
+        <div class="config-tabs" role="tablist" aria-label="Portfolio configuration sections">
+          <button type="button" id="portfolioSettingsTab" role="tab" aria-selected="false" aria-controls="portfolioSettingsPanel">Settings</button>
+          <button type="button" id="portfolioAssetsTab" role="tab" aria-selected="true" aria-controls="portfolioAssetsPanel" class="is-active">Portfolio Assets</button>
+        </div>
+
+        <div id="portfolioSettingsPanel" class="config-tab-panel" role="tabpanel" aria-labelledby="portfolioSettingsTab" hidden>
+          <div class="config-form-grid">
+            <label><span>Portfolio Name</span><input id="portfolioName" type="text" value="Portfolio" maxlength="40"></label>
+            <label><span>Benchmark Ticker(s)</span><input id="portfolioBenchmarks" type="text" value="SPY" placeholder="SPY, QQQ" maxlength="80" autocomplete="off" required><small>Enter up to five US stock or ETF tickers, separated by commas.</small></label>
+            <label><span>Optional Start Date</span><input id="portfolioStartDate" type="date" min="2015-07-20"></label>
+            <label><span>Rebalancing</span><select id="portfolioRebalancing"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annually</option><option value="none">Never — buy and hold</option></select></label>
+          </div>
+        </div>
+
+        <div id="portfolioAssetsPanel" class="config-tab-panel" role="tabpanel" aria-labelledby="portfolioAssetsTab">
+          <div class="portfolio-builder-heading"><div><h3>Portfolio Assets</h3><p>Enter 2–20 unique tickers. Allocations must total 100%.</p></div><strong id="portfolioWeightTotal" class="weight-total">100.00%</strong></div>
+          <div class="table-scroll"><table class="portfolio-input-table"><thead><tr><th>Asset</th><th>Portfolio #1 Allocation</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="portfolioHoldingRows"></tbody></table></div>
+          <div class="portfolio-form-actions"><button class="secondary-button" type="button" id="addPortfolioHolding">Add Asset</button><button class="primary-button" type="submit">Analyze Portfolio</button></div>
+        </div>
+      </form>
+      <div id="portfolioStatus" class="portfolio-status-inline" role="status" aria-live="polite">Ready to run a backtest.</div>
+    </section>
+
+    <section id="portfolioResults" class="portfolio-results" hidden>
+      <header class="results-heading"><h2 id="portfolioResultsTitle">Portfolio Analysis Results</h2><div class="section-rule"></div></header>
+      <section class="portfolio-allocation-card">
+        <div><h3 id="allocationPortfolioName">Portfolio</h3><table class="allocation-table"><thead><tr><th>Ticker</th><th>Allocation</th></tr></thead><tbody id="portfolioAllocationRows"></tbody></table></div>
+        <div class="allocation-visual"><div id="portfolioAllocationDonut" class="allocation-donut" aria-label="Portfolio allocation chart"><div>100%</div></div><div id="portfolioAllocationLegend" class="allocation-legend"></div></div>
+      </section>
+
+      <section class="portfolio-highlights">
+        <h3>Highlights</h3>
+        <div class="highlight-grid">
+          <article><span class="highlight-kicker">Return</span><h4>Annualized Return</h4><div class="highlight-values" id="portfolioAnnualizedValues"><div><span>Portfolio/BTC</span><strong>--</strong></div></div></article>
+          <article><span class="highlight-kicker">Risk</span><h4>Volatility and Drawdown</h4><div class="highlight-values"><div><span>Portfolio/BTC Standard Deviation</span><strong id="portfolioVolatilityBtc">--</strong></div><div><span>Portfolio/BTC Drawdown</span><strong id="portfolioDrawdownBtc">--</strong></div></div></article>
+        </div>
+      </section>
+
+      <section class="pv-section"><h3>Performance Summary</h3><div class="table-scroll"><table class="pv-summary-table"><thead><tr id="portfolioPerformanceHead"><th>Metric</th><th>Portfolio/BTC</th></tr></thead><tbody id="portfolioPerformanceRows"></tbody></table></div></section>
+
+      <section class="pv-section"><h3>Portfolio Growth</h3><p class="section-explainer" id="portfolioGrowthSummary"></p><label class="chart-option"><input id="portfolioLogScale" type="checkbox" checked> Logarithmic scale</label><article class="pv-chart-card"><div class="chart-legend" aria-label="Chart legend"><span class="legend-portfolio">Portfolio/BTC</span></div><div id="portfolioGrowthChart" class="portfolio-chart" aria-label="Portfolio value in Bitcoin"></div></article></section>
+
+      <section class="pv-section"><h3>Trailing Returns</h3><div class="table-scroll"><table class="pv-summary-table"><thead><tr id="portfolioTrailingHead"><th>Period</th><th>Portfolio/BTC</th></tr></thead><tbody id="portfolioTrailingRows"></tbody></table></div></section>
+
+      <section class="pv-section"><h3>Rolling Returns</h3><p class="section-explainer">Trailing one-year return of the Portfolio/BTC series.</p><article class="pv-chart-card"><div id="portfolioRollingChart" class="portfolio-chart portfolio-rolling-chart" aria-label="Rolling one-year return of the portfolio in Bitcoin terms"></div></article></section>
+
+      <section class="pv-section"><h3>Annual Returns</h3><div class="table-scroll"><table class="pv-summary-table"><thead><tr id="portfolioCalendarHead"><th>Year</th><th>Portfolio/BTC</th></tr></thead><tbody id="portfolioCalendarRows"></tbody></table></div></section>
+
+      <details class="notes-strip portfolio-notes"><summary><span>Notes and Disclosures</span><span aria-hidden="true">⌄</span></summary><div class="notes-strip-body"><h4>Data source</h4><div id="portfolioSource" class="source-line"></div><h4>Analysis notes</h4><div id="portfolioWarnings" class="portfolio-note"></div><h4>Methodology</h4><p id="portfolioMethodology"></p></div></details>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer-inner"><span>© 2026 Central Consulting Company</span><div class="site-footer-links"><a href="mailto:contact@satvalue.com">Contact</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div></div></footer>
+  <script src="script.js?v=20260802-24"></script>
+</body>
+</html>
+

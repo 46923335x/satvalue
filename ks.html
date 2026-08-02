@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Learn how SatValue converts conventional asset prices into kS, a readable Bitcoin-denominated unit of account.">
+  <title>What is kS? | SatValue</title>
+  <link rel="stylesheet" href="style.css?v=20260802-23">
+  <link rel="icon" href="favicon.ico">
+</head>
+<body data-page="unit-guide">
+  <nav class="navbar" aria-label="Primary navigation">
+    <div class="nav-left"><a class="logo-link" href="index.html"><img class="logo-mark" src="SV_Logo.PNG" alt="SatValue logo"><span class="logo">SatValue.com</span></a></div>
+    <div class="nav-links">
+      <div class="dropdown dropdown-menu dropdown-split" id="sectorsDropdown"><a class="nav-link-direct nav-split-link" href="sectors.html">Sectors</a><button class="dropdown-icon-toggle" id="sectorsToggle" type="button" aria-label="Open sectors menu" aria-expanded="false">&#9660;</button><div class="dropdown-panel" id="sectorsMenu"></div></div>
+      <div class="dropdown dropdown-menu dropdown-split" id="assetClassesDropdown"><a class="nav-link-direct nav-split-link" href="asset-classes.html">Asset Classes</a><button class="dropdown-icon-toggle" id="assetClassesToggle" type="button" aria-label="Open asset classes menu" aria-expanded="false">&#9660;</button><div class="dropdown-panel" id="assetClassesMenu"></div></div>
+      <a class="nav-link-direct" href="countries.html">Countries</a>
+      <a class="nav-link-direct" href="portfolio.html">Portfolio</a>
+    </div>
+    <form class="nav-search" role="search"><input class="search-input" name="symbol" aria-label="Ticker symbol" placeholder="Enter a ticker" maxlength="10" autocomplete="off" required><button class="search-button" type="submit">Search</button></form>
+  </nav>
+
+  <main class="markets-shell unit-guide-main">
+    <header class="unit-guide-hero">
+      <h1>What is kS?</h1>
+      <p>kS is a practical unit of account for expressing conventional asset prices in Bitcoin.</p>
+      <div class="unit-definition">
+        <strong>Prices are displayed in kS (&ldquo;Kays&rdquo;), where 1 kS = 1,000 satoshis.</strong>
+        <p>One Bitcoin contains 100,000 kS. This intermediate unit avoids both tiny BTC decimals and unnecessarily large satoshi values.</p>
+      </div>
+    </header>
+
+    <section class="unit-guide-grid">
+      <article class="unit-guide-card unit-guide-wide">
+        <h2>Converting an asset price into Bitcoin</h2>
+        <p>Converting a dollar price into Bitcoin works like any other currency conversion. Let <var>P<sub>USD</sub></var> be the asset price in dollars and <var>P<sub>BTC</sub></var> its price in Bitcoin.</p>
+        <p>If the exchange rate is expressed as BTC per USD, multiply by that rate:</p>
+        <div class="unit-equation" aria-label="Asset price in Bitcoin equals asset price in US dollars multiplied by Bitcoin per US dollar">
+          <var>P<sub>BTC</sub></var> = <var>P<sub>USD</sub></var> &times; <span>BTC per USD</span>
+        </div>
+        <p>Most markets quote Bitcoin as USD per BTC. With that familiar convention, divide instead:</p>
+        <div class="unit-equation" aria-label="Asset price in Bitcoin equals asset price in US dollars divided by US dollars per Bitcoin">
+          <var>P<sub>BTC</sub></var> = <span class="equation-fraction"><span><var>P<sub>USD</sub></var></span><span>USD/BTC</span></span>
+        </div>
+      </article>
+
+      <article class="unit-guide-card unit-guide-wide">
+        <h2>Converting Bitcoin into kS</h2>
+        <p>Because 1 BTC equals 100,000 kS, multiply a BTC-denominated price by 100,000:</p>
+        <div class="unit-equation" aria-label="Asset price in kS equals asset price in Bitcoin multiplied by one hundred thousand">
+          <var>P<sub>kS</sub></var> = <var>P<sub>BTC</sub></var> &times; 100,000
+        </div>
+        <p>Combining the two conversions gives the formula SatValue uses:</p>
+        <div class="unit-equation unit-equation-primary" aria-label="Asset price in kS equals asset price in US dollars multiplied by one hundred thousand divided by US dollars per Bitcoin">
+          <var>P<sub>kS</sub></var> = <var>P<sub>USD</sub></var> &times; <span class="equation-fraction"><span>100,000</span><span>USD/BTC</span></span>
+        </div>
+        <blockquote class="unit-guide-callout">A stock&rsquo;s price in kS equals its dollar price multiplied by the current number of kS that one US dollar buys.</blockquote>
+        <div class="unit-equation unit-equation-plain" aria-label="Stock price multiplied by kS per US dollar equals stock price in kS">
+          Stock price &times; kS per USD = stock price in kS
+        </div>
+      </article>
+
+      <article class="unit-guide-card unit-guide-wide">
+        <h2>Example: Bitcoin at $200,000</h2>
+        <p>At a Bitcoin price of $200,000, one US dollar buys 0.5 kS.</p>
+        <div class="unit-example-grid">
+          <div><span>$100 stock</span><strong>50 kS</strong></div>
+          <div><span>$400 stock</span><strong>200 kS</strong></div>
+        </div>
+        <p>This is not a new valuation system. It is the same market price expressed in a different unit of account, just as a price can be converted from dollars into euros or yen.</p>
+      </article>
+
+      <article class="unit-guide-card">
+        <h2>Why kS?</h2>
+        <p>A price such as 0.002358 BTC is awkward to scan, while 235,800 sats is unnecessarily large. The equivalent 235.8 kS is easier to read and compare.</p>
+      </article>
+      <article class="unit-guide-card">
+        <h2>Style guide</h2>
+        <ul>
+          <li><strong>Symbol:</strong> kS</li>
+          <li><strong>Spoken:</strong> &ldquo;Kays&rdquo;</li>
+          <li><strong>Plural:</strong> &ldquo;Kays&rdquo;</li>
+          <li><strong>Definition:</strong> 1 kS = 1,000 sats = 0.00001 BTC</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer-inner"><span>&copy; 2026 Central Consulting Company</span><div class="site-footer-links"><a href="mailto:contact@satvalue.com">Contact</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div></div></footer>
+  <script src="script.js?v=20260802-22"></script>
+</body>
+</html>

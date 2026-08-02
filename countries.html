@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Compare country equity ETF proxies against Bitcoin on an interactive map and latest-completed-day common-date return table.">
+<title>Countries | SatValue</title>
+<link rel="stylesheet" href="style.css?v=20260802-23">
+<link rel="icon" href="favicon.ico">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js">
+</script>
+</head>
+<body data-page="countries">
+<nav class="navbar" aria-label="Primary navigation">
+<div class="nav-left">
+<a class="logo-link" href="index.html">
+<img class="logo-mark" src="SV_Logo.PNG" alt="SatValue logo">
+<span class="logo">SatValue.com</span>
+</a>
+</div>
+<div class="nav-links">
+<div class="dropdown dropdown-menu dropdown-split" id="sectorsDropdown">
+<a class="nav-link-direct nav-split-link" href="sectors.html">Sectors</a>
+<button class="dropdown-icon-toggle" id="sectorsToggle" type="button" aria-label="Open sectors menu" aria-expanded="false">&#9660;</button>
+<div class="dropdown-panel" id="sectorsMenu">
+</div>
+</div>
+<div class="dropdown dropdown-menu dropdown-split" id="assetClassesDropdown">
+<a class="nav-link-direct nav-split-link" href="asset-classes.html">Asset Classes</a>
+<button class="dropdown-icon-toggle" id="assetClassesToggle" type="button" aria-label="Open asset classes menu" aria-expanded="false">&#9660;</button>
+<div class="dropdown-panel" id="assetClassesMenu">
+</div>
+</div>
+<a class="nav-link-direct is-current" href="countries.html">Countries</a>
+<a class="nav-link-direct" href="portfolio.html">Portfolio</a>
+</div>
+<form class="nav-search" role="search">
+<input class="search-input" name="symbol" aria-label="Ticker symbol" placeholder="Enter a ticker" maxlength="10" autocomplete="off" required>
+<button class="search-button" type="submit">Search</button>
+</form>
+</nav>
+<main class="markets-shell">
+<section class="page-hero">
+<h1>Countries</h1>
+<p>Bitcoin-denominated performance for country equity ETFs across consistent return horizons.</p>
+</section>
+<section class="country-layout">
+<article class="markets-panel markets-map">
+<div class="markets-map-surface">
+<div id="countriesMap" class="countries-map-canvas" aria-label="Interactive world map of one-year Bitcoin-denominated returns">
+</div>
+<div class="markets-zoom">
+<button class="zoom-btn" type="button" id="countriesZoomIn" aria-label="Zoom map in">+</button>
+<button class="zoom-btn" type="button" id="countriesZoomOut" aria-label="Zoom map out">&minus;</button>
+</div>
+</div>
+</article>
+<article class="ranking-card">
+<div class="table-scroll">
+<table class="ranking-table country-table">
+<thead>
+<tr>
+<th><button data-country-sort="name">Country</button></th>
+<th><button data-country-sort="YTD">YTD</button></th>
+<th><button data-country-sort="1-Year">1Y</button></th>
+<th><button data-country-sort="3-Year">3Y</button></th>
+<th><button data-country-sort="5-Year">5Y</button></th>
+<th><button data-country-sort="10-Year">10Y</button></th>
+</tr>
+</thead>
+<tbody id="countryRows">
+<tr>
+<td colspan="6" class="loading-cell">Loading current data&hellip;</td>
+</tr>
+</tbody>
+</table>
+</div>
+</article>
+</section>
+<section class="notes-strip-section">
+<details class="notes-strip">
+<summary><span>Notes and disclosures</span><span aria-hidden="true">&#8964;</span></summary>
+<div class="notes-strip-body">
+<h4>Data source</h4>
+<div class="source-line" id="countrySource" role="status" aria-live="polite">Loading source details&hellip;</div>
+<h4>Methodology</h4>
+<p>Each result represents the listed country equity ETF&mdash;not a national economy or an uninvestable headline index. Returns are cumulative, not annualized. Missing history stays blank rather than being shortened or estimated.</p>
+</div>
+</details>
+</section>
+</main>
+<footer class="site-footer">
+<div class="site-footer-inner">
+<span>&copy; 2026 Central Consulting Company</span>
+<div class="site-footer-links">
+<a href="mailto:contact@satvalue.com">Contact</a>
+<a href="terms.html">Terms</a>
+<a href="privacy.html">Privacy</a>
+</div>
+</div>
+</footer>
+<script src="script.js?v=20260802-22">
+</script>
+</body>
+</html>
+
+

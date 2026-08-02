@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Research an investable asset-class proxy relative to Bitcoin with latest-completed-day market data and risk metrics.">
+<title>Asset-Class Research | SatValue</title>
+<link rel="stylesheet" href="style.css?v=20260802-23">
+<link rel="icon" href="favicon.ico">
+<script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js">
+</script>
+</head>
+<body data-page="asset-detail">
+<nav class="navbar" aria-label="Primary navigation">
+<div class="nav-left">
+<a class="logo-link" href="index.html">
+<img class="logo-mark" src="SV_Logo.PNG" alt="SatValue logo">
+<span class="logo">SatValue.com</span>
+</a>
+</div>
+<div class="nav-links">
+<div class="dropdown dropdown-menu dropdown-split" id="sectorsDropdown">
+<a class="nav-link-direct nav-split-link" href="sectors.html">Sectors</a>
+<button class="dropdown-icon-toggle" id="sectorsToggle" type="button" aria-label="Open sectors menu" aria-expanded="false">&#9660;</button>
+<div class="dropdown-panel" id="sectorsMenu">
+</div>
+</div>
+<div class="dropdown dropdown-menu dropdown-split" id="assetClassesDropdown">
+<a class="nav-link-direct nav-split-link is-current" href="asset-classes.html">Asset Classes</a>
+<button class="dropdown-icon-toggle" id="assetClassesToggle" type="button" aria-label="Open asset classes menu" aria-expanded="false">&#9660;</button>
+<div class="dropdown-panel" id="assetClassesMenu">
+</div>
+</div>
+<a class="nav-link-direct" href="countries.html">Countries</a>
+<a class="nav-link-direct" href="portfolio.html">Portfolio</a>
+</div>
+<form class="nav-search" role="search">
+<input class="search-input" name="symbol" aria-label="Ticker symbol" placeholder="Enter a ticker" maxlength="10" autocomplete="off" required>
+<button class="search-button" type="submit">Search</button>
+</form>
+</nav>
+<main class="research-main">
+<div class="research-wrap">
+<section class="hero hero-research">
+<h1 id="detailTitle">Asset Class</h1>
+<p id="detailDescription">This result represents the named investable proxy rather than the entire conceptual asset class.</p>
+<div class="fund-facts" id="fundFacts">
+</div>
+</section>
+<div class="page-status" id="researchPageStatus" role="status" aria-live="polite">Loading completed daily market data&hellip;</div>
+<section class="returns-section">
+<div class="metrics-grid">
+<div class="chart-box chart-box-plain">
+<div class="landing-chart sector-chart-frame">
+<div class="tv-chart-shell">
+<div class="tv-chart-meta">
+<div>
+<div class="tv-chart-label" id="researchChartLabel">Proxy / BTC</div>
+<div class="tv-chart-value" id="researchChartValue">--</div>
+</div>
+<div class="tv-chart-subtitle" id="researchChartRange">Loading&hellip;</div>
+</div>
+<div class="tv-chart-stage">
+<div id="researchChart" class="tv-chart-canvas" data-symbol="SPY" data-chart-style="line" aria-label="Asset-class BTC-relative line chart">
+</div>
+</div>
+<div class="tv-timeframe-row" id="researchTimeframeRow">
+<button class="tv-timeframe-btn" data-range="1W">1W</button>
+<button class="tv-timeframe-btn" data-range="1M">1M</button>
+<button class="tv-timeframe-btn" data-range="3M">3M</button>
+<button class="tv-timeframe-btn" data-range="6M">6M</button>
+<button class="tv-timeframe-btn" data-range="YTD">YTD</button>
+<button class="tv-timeframe-btn" data-range="1Y">1Y</button>
+<button class="tv-timeframe-btn" data-range="3Y">3Y</button>
+<button class="tv-timeframe-btn" data-range="5Y">5Y</button>
+<button class="tv-timeframe-btn" data-range="10Y">10Y</button>
+<button class="tv-timeframe-btn" data-range="MAX">MAX</button>
+</div>
+</div>
+</div>
+</div>
+<div class="returns-table">
+<h2>Cumulative Trailing Returns</h2>
+<table>
+<thead>
+<tr>
+<th>Period</th>
+<th class="right-align" id="researchReturnsHeading">Proxy/BTC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>YTD</td>
+<td>--</td>
+</tr>
+<tr>
+<td>1-Month</td>
+<td>--</td>
+</tr>
+<tr>
+<td>1-Year</td>
+<td>--</td>
+</tr>
+<tr>
+<td>3-Year</td>
+<td>--</td>
+</tr>
+<tr>
+<td>5-Year</td>
+<td>--</td>
+</tr>
+<tr>
+<td>10-Year</td>
+<td>--</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section class="stat-grid">
+<article class="stat-card">
+<span>CAGR</span>
+<strong id="metricCagr">--</strong>
+</article>
+<article class="stat-card">
+<span>Annualized volatility</span>
+<strong id="metricVolatility">--</strong>
+</article>
+<article class="stat-card">
+<span>Maximum drawdown</span>
+<strong id="metricMaxDrawdown">--</strong>
+</article>
+<article class="stat-card">
+<span>Current drawdown</span>
+<strong id="metricCurrentDrawdown">--</strong>
+</article>
+</section>
+<section class="research-secondary-grid">
+<article class="research-mini-card">
+<h2>Drawdown</h2>
+<div id="drawdownChart" class="drawdown-chart">
+</div>
+</article>
+<article class="research-mini-card">
+<h2>Calendar Returns</h2>
+<div class="table-scroll">
+<table class="mini-table">
+<thead>
+<tr>
+<th>Year</th>
+<th class="right-align">Return vs BTC</th>
+</tr>
+</thead>
+<tbody id="calendarReturnRows">
+<tr>
+<td colspan="2">Loading&hellip;</td>
+</tr>
+</tbody>
+</table>
+</div>
+</article>
+</section>
+<section class="notes-strip-section">
+<details class="notes-strip">
+<summary><span>Notes and disclosures</span><span aria-hidden="true">&#8964;</span></summary>
+<div class="notes-strip-body">
+<h4>Market data</h4>
+<div class="source-line" id="researchDataSource">Loading source details&hellip;</div>
+<h4>Fund information</h4>
+<div class="source-line" id="proxySource">Loading issuer details&hellip;</div>
+<h4>Proxy methodology</h4>
+<p id="proxyDisclosure">This result represents the listed investable proxy, not the complete conceptual asset class. Trailing returns are cumulative, not annualized. Summary metrics use the full available common history; volatility is annualized from daily changes using 252 observations per year.</p>
+<h4>Availability</h4>
+<p id="researchAvailability">Available history: loading&hellip;</p>
+</div>
+</details>
+</section>
+</div>
+</main>
+<footer class="site-footer">
+<div class="site-footer-inner">
+<span>&copy; 2026 Central Consulting Company</span>
+<div class="site-footer-links">
+<a href="mailto:contact@satvalue.com">Contact</a>
+<a href="terms.html">Terms</a>
+<a href="privacy.html">Privacy</a>
+</div>
+</div>
+</footer>
+<script src="script.js?v=20260802-22">
+</script>
+</body>
+</html>
+
+

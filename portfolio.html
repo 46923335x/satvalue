@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Backtest a weighted US stock or ETF portfolio in Bitcoin terms with completed daily market data.">
   <title>Backtest Portfolio Asset Allocation | SatValue</title>
-  <link rel="stylesheet" href="style.css?v=20260802-23">
+  <link rel="stylesheet" href="style.css?v=20260803-4">
   <link rel="icon" href="favicon.ico">
   <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -60,6 +60,7 @@
 
     <section id="portfolioResults" class="portfolio-results" hidden>
       <header class="results-heading"><h2 id="portfolioResultsTitle">Portfolio Analysis Results</h2><div class="section-rule"></div></header>
+      <p class="portfolio-opportunity-callout" id="portfolioOpportunityCost" aria-live="polite"></p>
       <section class="portfolio-allocation-card">
         <div><h3 id="allocationPortfolioName">Portfolio</h3><table class="allocation-table"><thead><tr><th>Ticker</th><th>Allocation</th></tr></thead><tbody id="portfolioAllocationRows"></tbody></table></div>
         <div class="allocation-visual"><div id="portfolioAllocationDonut" class="allocation-donut" aria-label="Portfolio allocation chart"><div>100%</div></div><div id="portfolioAllocationLegend" class="allocation-legend"></div></div>
@@ -75,7 +76,7 @@
 
       <section class="pv-section"><h3>Performance Summary</h3><div class="table-scroll"><table class="pv-summary-table"><thead><tr id="portfolioPerformanceHead"><th>Metric</th><th>Portfolio/BTC</th></tr></thead><tbody id="portfolioPerformanceRows"></tbody></table></div></section>
 
-      <section class="pv-section"><h3>Portfolio Growth</h3><p class="section-explainer" id="portfolioGrowthSummary"></p><label class="chart-option"><input id="portfolioLogScale" type="checkbox" checked> Logarithmic scale</label><article class="pv-chart-card"><div class="chart-legend" aria-label="Chart legend"><span class="legend-portfolio">Portfolio/BTC</span></div><div id="portfolioGrowthChart" class="portfolio-chart" aria-label="Portfolio value in Bitcoin"></div></article></section>
+      <section class="pv-section"><h3>Portfolio Growth</h3><p class="section-explainer" id="portfolioGrowthSummary"></p><label class="chart-option"><input id="portfolioLogScale" type="checkbox" checked> Logarithmic scale</label><article class="pv-chart-card"><div class="chart-legend" aria-label="Chart legend"><span class="legend-portfolio">Portfolio/BTC</span></div><div id="portfolioGrowthChart" class="portfolio-chart" aria-label="Portfolio value in Bitcoin"></div><div class="portfolio-timeframe-row" id="portfolioGrowthTimeframeRow" role="group" aria-label="Portfolio growth chart range"><button class="tv-timeframe-btn" type="button" data-range="1W">1W</button><button class="tv-timeframe-btn" type="button" data-range="1M">1M</button><button class="tv-timeframe-btn" type="button" data-range="3M">3M</button><button class="tv-timeframe-btn" type="button" data-range="6M">6M</button><button class="tv-timeframe-btn" type="button" data-range="YTD">YTD</button><button class="tv-timeframe-btn" type="button" data-range="1Y">1Y</button><button class="tv-timeframe-btn" type="button" data-range="3Y">3Y</button><button class="tv-timeframe-btn" type="button" data-range="5Y">5Y</button><button class="tv-timeframe-btn" type="button" data-range="10Y">10Y</button><button class="tv-timeframe-btn is-active" type="button" data-range="MAX" aria-pressed="true">MAX</button></div></article></section>
 
       <section class="pv-section"><h3>Trailing Returns</h3><div class="table-scroll"><table class="pv-summary-table"><thead><tr id="portfolioTrailingHead"><th>Period</th><th>Portfolio/BTC</th></tr></thead><tbody id="portfolioTrailingRows"></tbody></table></div></section>
 
@@ -88,7 +89,7 @@
   </main>
 
   <footer class="site-footer"><div class="site-footer-inner"><span>© 2026 Central Consulting Company</span><div class="site-footer-links"><a href="mailto:contact@satvalue.com">Contact</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div></div></footer>
-  <script src="script.js?v=20260802-24"></script>
+  <script src="script.js?v=20260803-6"></script>
 </body>
 </html>
 

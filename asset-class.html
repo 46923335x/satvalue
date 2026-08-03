@@ -41,9 +41,9 @@
 </nav>
 <main class="research-main">
 <div class="research-wrap">
-<section class="hero hero-research">
-<h1 id="detailTitle">Asset Class</h1>
-<p id="detailDescription">This result represents the named investable proxy rather than the entire conceptual asset class.</p>
+<section class="hero hero-research" id="detailHero" hidden>
+<h1 id="detailTitle"></h1>
+<p id="detailDescription" hidden></p>
 <div class="fund-facts" id="fundFacts">
 </div>
 </section>
@@ -61,7 +61,7 @@
 <div class="tv-chart-subtitle" id="researchChartRange">Loading&hellip;</div>
 </div>
 <div class="tv-chart-stage">
-<div id="researchChart" class="tv-chart-canvas" data-symbol="SPY" data-chart-style="line" aria-label="Asset-class BTC-relative line chart">
+<div id="researchChart" class="tv-chart-canvas" data-symbol="SPY" aria-label="Asset-class Bitcoin-denominated candlestick chart">
 </div>
 </div>
 <div class="tv-timeframe-row" id="researchTimeframeRow">
@@ -136,25 +136,20 @@
 <strong id="metricCurrentDrawdown">--</strong>
 </article>
 </section>
-<section class="research-secondary-grid">
-<article class="research-mini-card">
-<h2>Drawdown</h2>
-<div id="drawdownChart" class="drawdown-chart">
-</div>
-</article>
-<article class="research-mini-card">
+<section class="calendar-quilt-section">
+<article class="research-mini-card calendar-quilt-card">
 <h2>Calendar Returns</h2>
+<p class="calendar-quilt-caption">Monthly and year-to-date returns denominated in Bitcoin.</p>
 <div class="table-scroll">
-<table class="mini-table">
+<table class="mini-table calendar-quilt-table">
 <thead>
 <tr>
-<th>Year</th>
-<th class="right-align">Return vs BTC</th>
+<th>Year</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th><th>YTD</th>
 </tr>
 </thead>
-<tbody id="calendarReturnRows">
+<tbody id="calendarQuiltRows">
 <tr>
-<td colspan="2">Loading&hellip;</td>
+<td colspan="14">Loading&hellip;</td>
 </tr>
 </tbody>
 </table>
@@ -188,7 +183,7 @@
 </div>
 </div>
 </footer>
-<script src="script.js?v=20260802-22">
+<script src="script.js?v=20260803-1">
 </script>
 </body>
 </html>

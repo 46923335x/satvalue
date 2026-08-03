@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Why SatValue denominates global markets in Bitcoin and what changing the numeraire reveals about investment performance and purchasing power.">
   <title>Why Denominate Markets in Bitcoin? | SatValue</title>
-  <link rel="stylesheet" href="style.css?v=20260802-23">
+  <link rel="stylesheet" href="style.css?v=20260803-3">
   <link rel="icon" href="favicon.ico">
 </head>
 <body data-page="essay">
@@ -28,7 +28,7 @@
 
     <article class="essay-body">
       <section>
-        <p class="essay-lead">When we say Apple trades at $250 per share, we are not measuring an intrinsic property of Apple. We are expressing the value of one share relative to a particular unit of account: the U.S. dollar.</p>
+        <p>When we say Apple trades at $250 per share, we are not measuring an intrinsic property of Apple. We are expressing the value of one share relative to a particular unit of account: the U.S. dollar.</p>
         <p>This is so familiar that it often goes unnoticed. Investors in the United Kingdom naturally think about wealth in pounds. Europeans think in euros. Japanese investors think in yen. The same company, on the same day, can have different price histories depending entirely on which currency is used to measure it.</p>
         <p>The underlying asset has not changed. Only the numeraire has.</p>
         <p>Economics has long recognized this distinction, but financial media rarely does. Returns are usually reported in domestic currency, reinforcing the assumption that the chosen unit of account is neutral. It is not.</p>
@@ -38,10 +38,15 @@
 
       <section>
         <h2>The Same Asset, a Different Story</h2>
-        <p>The familiar dollar price can be written as:</p>
-        <div class="essay-equation">Stock price &times; USD per dollar = stock price in USD</div>
-        <p>Expressing the same asset in Bitcoin is simply a currency conversion:</p>
-        <div class="essay-equation essay-equation-primary">Stock price &times; BTC per dollar = stock price in BTC</div>
+        <p>Expressing a dollar-denominated stock price in Bitcoin is an ordinary currency conversion. The relationship can be written so the units cancel directly:</p>
+        <div class="essay-equation essay-equation-primary essay-equation-conversion" aria-label="Stock price over US dollars, multiplied by US dollars over Bitcoin, equals stock price over Bitcoin">
+          <span class="equation-fraction"><span>Stock Price</span><span>USD</span></span>
+          <span aria-hidden="true">&times;</span>
+          <span class="equation-fraction"><span>USD</span><span>BTC</span></span>
+          <span aria-hidden="true">=</span>
+          <span class="equation-fraction"><span>Stock Price</span><span>BTC</span></span>
+        </div>
+        <p>The USD denominator in the first fraction cancels with the USD numerator in the second, leaving the stock price expressed in BTC. The calculation changes the numeraire, not the underlying asset.</p>
         <p>Nothing about the underlying business changes. Only the unit of measurement changes. Yet the conclusions can be dramatically different.</p>
         <p>An investment that appears to have compounded at 10% annually in U.S. dollars may have lost more than 99% of its value when denominated in Bitcoin over the same period. That is not a contradiction. It means Bitcoin appreciated faster than the investment itself.</p>
         <p>Instead of asking only whether an investment created wealth in dollar terms, we can ask whether it created wealth relative to an increasingly scarce monetary asset. Those are not the same question.</p>

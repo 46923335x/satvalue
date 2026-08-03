@@ -43,9 +43,9 @@
         <div id="portfolioSettingsPanel" class="config-tab-panel" role="tabpanel" aria-labelledby="portfolioSettingsTab" hidden>
           <div class="config-form-grid">
             <label><span>Portfolio Name</span><input id="portfolioName" type="text" value="Portfolio" maxlength="40"></label>
-            <label><span>Benchmark Ticker(s)</span><input id="portfolioBenchmarks" type="text" value="SPY" placeholder="SPY, QQQ" maxlength="80" autocomplete="off" required><small>Enter up to five US stock or ETF tickers, separated by commas.</small></label>
+            <label><span>Benchmark Ticker(s)</span><input id="portfolioBenchmarks" type="text" value="VTI" placeholder="VTI, QQQ" maxlength="80" autocomplete="off" required><small>Enter up to five US stock or ETF tickers, separated by commas.</small></label>
             <label><span>Optional Start Date</span><input id="portfolioStartDate" type="date" min="2015-07-20"></label>
-            <label><span>Rebalancing</span><select id="portfolioRebalancing"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annually</option><option value="none">Never — buy and hold</option></select></label>
+            <label><span>Rebalancing</span><select id="portfolioRebalancing"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual" selected>Annually</option><option value="none">Never — buy and hold</option></select></label>
           </div>
         </div>
 
@@ -91,4 +91,5 @@
   <script src="script.js?v=20260802-24"></script>
 </body>
 </html>
+
 

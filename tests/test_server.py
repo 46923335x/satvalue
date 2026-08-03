@@ -1,10 +1,92 @@
 import unittest
 from datetime import date
+from io import BytesIO
 
-from server import ASSET_CLASSES, COUNTRIES, PortfolioValidationError, build_portfolio_values, build_ratio_series, calendar_returns, parse_state_street_xlc, research_metrics, return_for_target, rolling_returns, security_metadata, trailing_returns, validate_portfolio_request
+from server import ASSET_CLASSES, COUNTRIES, MarketDataError, PortfolioValidationError, build_portfolio_values, build_ratio_series, calendar_returns, canonical_symbol, extract_morningstar_company_description, extract_morningstar_etf_payload, extract_morningstar_etf_strategy, extract_morningstar_strategy_response, extract_yahoo_etf_description, monthly_calendar_returns, morningstar_exchange_slug, parse_state_street_xlc, read_request_body, research_metrics, return_for_target, rolling_returns, security_metadata, summarize_company_description, trailing_returns, validate_portfolio_request
+
+
+class RequestBodyTests(unittest.TestCase):
+    def test_reads_content_length_body(self):
+        body = b'{"holdings":[]}'
+        self.assertEqual(read_request_body({"Content-Length": str(len(body))}, BytesIO(body), 1024), body)
+
+    def test_reads_chunked_body_used_by_reverse_proxies(self):
+        encoded = b'5\r\n{"hol\r\nA\r\ndings":[]}\r\n0\r\n\r\n'
+        self.assertEqual(
+            read_request_body({"Transfer-Encoding": "chunked"}, BytesIO(encoded), 1024),
+            b'{"holdings":[]}',
+        )
+
+    def test_rejects_chunked_body_over_limit(self):
+        with self.assertRaises(MarketDataError):
+            read_request_body({"Transfer-Encoding": "chunked"}, BytesIO(b'5\r\nhello\r\n0\r\n\r\n'), 4)
+
+
+class SymbolTests(unittest.TestCase):
+    def test_legacy_fb_symbol_uses_meta_history(self):
+        self.assertEqual(canonical_symbol("FB"), "META")
+
+    def test_company_profile_summary_removes_markup_and_limits_length(self):
+        text = "<p>First sentence about the company.</p> Second sentence provides useful context. " + ("Extra detail. " * 80)
+        summary = summarize_company_description(text, 120)
+        self.assertNotIn("<p>", summary)
+        self.assertLessEqual(len(summary), 120)
+
+    def test_extracts_complete_morningstar_company_profile(self):
+        markup = '<div><span itemprop="description">First sentence. <em>Second</em> sentence &amp; detail.</span></div>'
+        self.assertEqual(
+            extract_morningstar_company_description(markup),
+            "First sentence. Second sentence & detail.",
+        )
+
+    def test_extracts_complete_morningstar_etf_strategy(self):
+        markup = '<div class="sal-mip-strategy__body">Track the broad market. <strong>Invests</strong> at least 80%.</div>'
+        self.assertEqual(
+            extract_morningstar_etf_strategy(markup),
+            "Track the broad market. Invests at least 80%.",
+        )
+
+    def test_extracts_morningstar_etf_strategy_payload_without_executing_page_script(self):
+        markup = '''<script>window.__NUXT__=(function(a,b,c){return {helper:function(){return {}},security:{securityID:a},strategy:{status:"ok",payload:{contentType:b,token:c}}}}("FEUSA0002P","content-marker","temporary-token"));</script>'''
+        self.assertEqual(
+            extract_morningstar_etf_payload(markup),
+            {"securityId": "FEUSA0002P", "contentType": "content-marker", "token": "temporary-token"},
+        )
+
+    def test_extracts_strategy_text_from_nested_service_response(self):
+        payload = {"data": {"investmentStrategy": "The fund seeks broad-market exposure and normally invests substantially all assets in its target index."}}
+        self.assertEqual(
+            extract_morningstar_strategy_response(payload),
+            payload["data"]["investmentStrategy"],
+        )
+
+    def test_extracts_etf_description_from_fallback_profile(self):
+        payload = {"quoteSummary": {"result": [{"summaryProfile": {"longBusinessSummary": "The fund tracks a diversified value index.  It normally invests at least 80% in index constituents."}}]}}
+        self.assertEqual(
+            extract_yahoo_etf_description(payload),
+            "The fund tracks a diversified value index. It normally invests at least 80% in index constituents.",
+        )
+
+    def test_maps_alpaca_exchange_to_morningstar_market(self):
+        self.assertEqual(morningstar_exchange_slug("NASDAQ"), "xnas")
+        self.assertEqual(morningstar_exchange_slug("NYSE"), "xnys")
+        self.assertIsNone(morningstar_exchange_slug("UNKNOWN"))
 
 
 class RatioSeriesTests(unittest.TestCase):
+    def test_monthly_calendar_quilt_uses_previous_month_and_year_end(self):
+        series = [
+            {"time": "2024-12-31", "close": 100},
+            {"time": "2025-01-31", "close": 110},
+            {"time": "2025-02-28", "close": 99},
+            {"time": "2025-12-31", "close": 120},
+        ]
+        rows = monthly_calendar_returns(series)
+        self.assertEqual(rows[0]["year"], 2025)
+        self.assertAlmostEqual(rows[0]["months"][0], 10.0)
+        self.assertAlmostEqual(rows[0]["months"][1], -10.0)
+        self.assertAlmostEqual(rows[0]["ytd"], 20.0)
+
     def test_ratio_uses_crossed_high_low_bounds(self):
         stock = [{"t": "2026-01-02T05:00:00Z", "o": 100, "h": 110, "l": 90, "c": 105}]
         btc = [{"t": "2026-01-02T00:00:00Z", "o": 50, "h": 55, "l": 45, "c": 52.5}]

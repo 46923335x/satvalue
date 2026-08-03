@@ -187,6 +187,22 @@ function aggregateWeekly(rawData) {
   return [...buckets.values()];
 }
 
+function aggregateMonthly(rawData) {
+  const buckets = new Map();
+  for (const point of rawData) {
+    const key = point.time.slice(0, 7);
+    const prior = buckets.get(key);
+    if (!prior) buckets.set(key, { ...point });
+    else {
+      prior.rawHigh = Math.max(prior.rawHigh, point.rawHigh);
+      prior.rawLow = Math.min(prior.rawLow, point.rawLow);
+      prior.rawClose = point.rawClose;
+      prior.time = point.time;
+    }
+  }
+  return [...buckets.values()];
+}
+
 function rangeCutoff(range, latest) {
   const date = new Date(latest);
   if (range === "1W") date.setUTCDate(date.getUTCDate() - 7);
@@ -202,8 +218,9 @@ function rangeCutoff(range, latest) {
   return date;
 }
 
-function dataForRange(range, daily, weekly) {
-  return ["3Y", "5Y", "10Y", "MAX"].includes(range) ? weekly : daily;
+function dataForRange(range, daily, weekly, monthly) {
+  if (["10Y", "MAX"].includes(range)) return monthly;
+  return ["3Y", "5Y"].includes(range) ? weekly : daily;
 }
 
 function visibleStartIndex(range, data) {
@@ -239,7 +256,7 @@ function updateTrailingReturns(values = {}) {
     if (!cell) return;
     const value = values[label];
     cell.textContent = formatPercent(value);
-    cell.className = Number.isFinite(Number(value)) ? (Number(value) >= 0 ? "positive-text" : "negative-text") : "muted-text";
+    cell.className = `right-align ${Number.isFinite(Number(value)) ? (Number(value) >= 0 ? "positive-text" : "negative-text") : "muted-text"}`;
   });
 }
 
@@ -255,6 +272,29 @@ function renderResearchMetrics(payload) {
       const year = document.createElement("td"); const value = document.createElement("td");
       year.textContent = item.year; value.textContent = formatPercent(item.return); value.className = `right-align ${Number(item.return) >= 0 ? "positive-text" : "negative-text"}`;
       row.append(year, value); return row;
+    }));
+  }
+  const quiltRows = document.getElementById("calendarQuiltRows");
+  if (quiltRows) {
+    const rowsData = payload.monthlyCalendarReturns || [];
+    const finiteValues = rowsData.flatMap((item) => [...(item.months || []), item.ytd]).filter((value) => value !== null && Number.isFinite(Number(value))).map(Number);
+    const maxGain = Math.max(0, ...finiteValues);
+    const maxLoss = Math.abs(Math.min(0, ...finiteValues));
+    const heatCell = (value) => {
+      const cell = document.createElement("td");
+      if (value === null || !Number.isFinite(Number(value))) {
+        cell.textContent = "--"; cell.className = "is-empty"; return cell;
+      }
+      const number = Number(value); const scale = number >= 0 ? (maxGain ? number / maxGain : 0) : (maxLoss ? Math.abs(number) / maxLoss : 0);
+      const alpha = .1 + Math.max(0, Math.min(1, scale)) * .68;
+      cell.textContent = formatPercent(number);
+      cell.style.backgroundColor = number >= 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`;
+      cell.style.color = scale > .62 ? "#fff" : (number >= 0 ? "#047857" : "#b91c1c");
+      return cell;
+    };
+    quiltRows.replaceChildren(...(rowsData.length ? rowsData : [{ year: "--", months: Array(12).fill(null), ytd: null }]).map((item) => {
+      const row = document.createElement("tr"); const year = document.createElement("td"); year.textContent = item.year; row.append(year);
+      (item.months || Array(12).fill(null)).forEach((value) => row.append(heatCell(value))); row.append(heatCell(item.ytd)); return row;
     }));
   }
   const availability = document.getElementById("researchAvailability");
@@ -285,6 +325,21 @@ async function initResearchChart() {
   const status = document.getElementById("researchPageStatus");
   if (!container || !chartRange || !timeframeRow || !window.LightweightCharts) return null;
   const symbol = selectedResearchSymbol(container);
+  const requestedLandingSecurity = document.body.dataset.page === "research" && new URLSearchParams(location.search).has("symbol");
+  const landingHero = document.querySelector(".landing-hero");
+  const heroTitle = document.getElementById("landingHeroTitle");
+  const heroDescription = document.getElementById("landingHeroDescription");
+  const heading = document.getElementById("researchAssetHeading");
+  if (requestedLandingSecurity) {
+    delete container.dataset.chartStyle;
+    container.setAttribute("aria-label", "Stock Bitcoin-denominated candlestick chart");
+  }
+  if (requestedLandingSecurity && landingHero) {
+    landingHero.classList.add("is-security-result");
+    if (heroTitle) heroTitle.textContent = symbol;
+    if (heroDescription) heroDescription.textContent = "Loading company profile and market data…";
+    if (heading) heading.hidden = true;
+  }
   if (chartLabel) chartLabel.textContent = `${symbol === "BTCUSD" ? "BTC" : symbol} / BTC`;
   try {
     const payload = await loadResearchSeries(symbol);
@@ -292,8 +347,17 @@ async function initResearchChart() {
     updateTrailingReturns(payload.trailingReturns);
     renderResearchMetrics(payload);
     renderDrawdown(payload);
-    const heading = document.getElementById("researchAssetHeading");
     if (heading) heading.textContent = payload.security?.name || symbol;
+    if (requestedLandingSecurity && landingHero) {
+      if (heroTitle) heroTitle.textContent = payload.security?.name || symbol;
+      if (heroDescription) heroDescription.textContent = payload.security?.description || `${payload.security?.name || symbol} is a US-listed security${payload.security?.exchange ? ` traded on ${payload.security.exchange}` : ""}. The performance below is denominated in Bitcoin.`;
+      if (heading) heading.hidden = true;
+      const profileSource = document.getElementById("researchProfileSource");
+      if (profileSource && payload.security?.profileSourceUrl) {
+        const link = document.createElement("a"); link.href = payload.security.profileSourceUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = payload.security.profileSource || "Company profile";
+        profileSource.replaceChildren(link); profileSource.hidden = false;
+      }
+    }
     const meta = document.getElementById("researchSecurityMeta");
     if (meta) meta.textContent = "Performance measured in Bitcoin";
     const returnsHeading = document.getElementById("researchReturnsHeading");
@@ -303,7 +367,7 @@ async function initResearchChart() {
     if (researchSource) { researchSource.textContent = sourceSummary; researchSource.classList.toggle("is-stale", Boolean(payload.stale)); }
     if (status) { status.hidden = true; status.textContent = sourceSummary; status.classList.toggle("is-stale", Boolean(payload.stale)); }
 
-    const daily = payload.bars; const weekly = aggregateWeekly(daily);
+    const daily = payload.bars; const weekly = aggregateWeekly(daily); const monthly = aggregateMonthly(daily);
     let active = daily; let current = []; let activeRange = "MAX"; let suppress = false; let rebasing = false; let lastBase = -1;
     const isCandlestick = payload.chartType === "candlestick" && container.dataset.chartStyle !== "line";
     const chart = LightweightCharts.createChart(container, {
@@ -325,7 +389,7 @@ async function initResearchChart() {
       series.applyOptions(isCandlestick ? { priceLineColor: color } : { color, priceLineColor: color }); if (chartValue) chartValue.textContent = formatPercent(latest, 2);
     }
     function applyRange(range) {
-      activeRange = range; active = dataForRange(range, daily, weekly); const from = visibleStartIndex(range, active); const to = active.length - 1; suppress = true; rebase(from);
+      activeRange = range; active = dataForRange(range, daily, weekly, monthly); const from = visibleStartIndex(range, active); const to = active.length - 1; suppress = true; rebase(from);
       chart.timeScale().applyOptions({ barSpacing: Math.max(.25, Math.min(10, Math.max(240, container.clientWidth - 90) / Math.max(1, to - from + 1))) });
       chart.timeScale().setVisibleRange({ from: current[from].time, to: current[to].time }); suppress = false;
       timeframeRow.querySelectorAll("[data-range]").forEach((button) => { const selected = button.dataset.range === range; button.classList.toggle("is-active", selected); button.setAttribute("aria-pressed", String(selected)); });
@@ -339,6 +403,7 @@ async function initResearchChart() {
     applyRange("MAX");
     return payload;
   } catch (error) {
+    if (requestedLandingSecurity && heroDescription) heroDescription.textContent = error.message || "Company profile and market data are unavailable.";
     chartRange.textContent = error.message || "Market data is unavailable."; if (chartValue) chartValue.textContent = "Unavailable"; updateTrailingReturns({});
     if (status) { status.hidden = false; status.textContent = error.message || "Market data is unavailable."; status.classList.add("is-error"); }
     container.replaceChildren();
@@ -369,17 +434,23 @@ async function configureDetailPage() {
   }
   const chart = document.getElementById("researchChart");
   chart.dataset.symbol = item.symbol === "BTC/USD" ? "BTCUSD" : item.symbol;
-  if (group === "countries") delete chart.dataset.chartStyle;
+  delete chart.dataset.chartStyle;
   document.body.dataset.fundSymbol = item.symbol;
   const title = document.getElementById("detailTitle"); if (title) title.textContent = item.name;
   const description = document.getElementById("detailDescription");
-  if (description) description.textContent = item.description || (group === "countries" ? `${item.name} equity-market performance represented by ${item.symbol} and denominated in Bitcoin.` : `This page represents ${item.name} using the investable ${item.symbol} proxy rather than the entire conceptual asset class.`);
+  if (description) {
+    const showDescription = group === "sectors";
+    description.hidden = !showDescription;
+    description.textContent = showDescription ? (item.description || "") : "";
+  }
   const facts = document.getElementById("fundFacts");
   if (facts) {
     const dateFact = item.dataStartDate ? ["Data start", formatDate(item.dataStartDate)] : ["Fund inception", formatDate(item.inceptionDate)];
-    const entries = [["Proxy", item.symbol], dateFact, ["Expense ratio", Number.isFinite(item.expenseRatio) ? `${item.expenseRatio.toFixed(2)}%` : null], ["Benchmark", item.benchmark]];
+    const entries = [["Proxy", item.symbol], ...(group === "sectors" ? [dateFact] : []), ["Expense ratio", Number.isFinite(item.expenseRatio) ? `${item.expenseRatio.toFixed(2)}%` : null], ["Benchmark", item.benchmark]];
     facts.replaceChildren(...entries.filter(([, value]) => value).map(([label, value]) => { const span = document.createElement("span"); span.textContent = `${label}: ${value}`; return span; }));
   }
+  const detailHero = document.getElementById("detailHero");
+  if (detailHero) detailHero.hidden = false;
   const proxySource = document.getElementById("proxySource");
   if (proxySource && item.issuerUrl) { const link = document.createElement("a"); link.href = item.issuerUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = `${item.issuer || "Issuer"} fund information`; proxySource.replaceChildren(link); }
   const disclosure = document.getElementById("proxyDisclosure"); if (disclosure) disclosure.textContent = group === "countries"
@@ -430,7 +501,7 @@ async function initRankingPage() {
   try {
     const response = await fetch(`/api/rankings?group=${encodeURIComponent(group)}`, { cache: "no-store" }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "Rankings unavailable.");
     window.__satvalueRankings = payload; let items = payload.items.slice();
-    let sortKey = "1-Year"; let direction = -1;
+    let sortKey = "name"; let direction = 1;
     source.textContent = `${payload.source} · common as of ${formatDate(payload.asOf)} · registry ${payload.registryVersion} · refreshes every ${Math.round(payload.cacheTtlSeconds / 60)} minutes${payload.stale ? " · STALE" : ""}`; source.classList.toggle("is-stale", payload.stale);
     function render() {
       body.replaceChildren(...items.map((item) => {
@@ -441,7 +512,7 @@ async function initRankingPage() {
       }));
     }
     document.querySelectorAll("[data-sort]").forEach((button) => button.addEventListener("click", () => { const next = button.dataset.sort; direction = sortKey === next ? direction * -1 : (next === "name" ? 1 : -1); sortKey = next; items.sort((a, b) => { const av = next === "name" ? a.name : a.returns?.[next]; const bv = next === "name" ? b.name : b.returns?.[next]; if (av == null) return 1; if (bv == null) return -1; return (typeof av === "string" ? av.localeCompare(bv) : av - bv) * direction; }); render(); }));
-    items.sort((a, b) => (b.returns?.[sortKey] ?? -Infinity) - (a.returns?.[sortKey] ?? -Infinity)); render();
+    items.sort((a, b) => a.name.localeCompare(b.name)); render();
   } catch (error) { body.innerHTML = `<tr><td colspan="7" class="error-cell"></td></tr>`; body.querySelector("td").textContent = error.message; source.textContent = "Rankings unavailable"; source.classList.add("is-error"); }
 }
 
@@ -450,14 +521,19 @@ async function initCountries() {
   if (!rows || !source || !map) return;
   try {
     const response = await fetch("/api/rankings?group=countries", { cache: "no-store" }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "Country data unavailable.");
-    window.__satvalueCountries = payload; let items = payload.items.slice(); let sortKey = "1-Year"; let direction = -1;
+    window.__satvalueCountries = payload; let items = payload.items.slice(); let sortKey = "name"; let direction = 1;
     source.textContent = `${payload.source} · common as of ${formatDate(payload.asOf)} · registry ${payload.registryVersion}${payload.stale ? " · STALE" : ""}`; source.classList.toggle("is-stale", payload.stale);
     const renderRows = () => rows.replaceChildren(...items.map((item) => { const row = document.createElement("tr"); const name = document.createElement("td"); const link = document.createElement("a"); link.href = `asset-class.html?group=countries&key=${encodeURIComponent(item.key)}`; link.textContent = item.name; name.append(link); row.append(name); ["YTD", "1-Year", "3-Year", "5-Year", "10-Year"].forEach((period) => row.append(returnCell(item.returns?.[period]))); return row; }));
     document.querySelectorAll("[data-country-sort]").forEach((button) => button.addEventListener("click", () => { const next = button.dataset.countrySort; direction = sortKey === next ? direction * -1 : (next === "name" ? 1 : -1); sortKey = next; items.sort((a, b) => { const av = next === "name" ? a.name : a.returns?.[next]; const bv = next === "name" ? b.name : b.returns?.[next]; if (av == null) return 1; if (bv == null) return -1; return (typeof av === "string" ? av.localeCompare(bv) : av - bv) * direction; }); renderRows(); }));
-    items.sort((a, b) => (b.returns?.[sortKey] ?? -Infinity) - (a.returns?.[sortKey] ?? -Infinity)); renderRows();
+    items.sort((a, b) => a.name.localeCompare(b.name)); renderRows();
     if (!window.Plotly) throw new Error("Map library unavailable.");
-    const trace = { type: "choropleth", locationmode: "ISO-3", locations: items.map((item) => item.iso3), z: items.map((item) => item.returns?.["1-Year"]), text: items.map((item) => item.name), customdata: items.map((item) => [item.symbol, item.returns?.YTD, item.returns?.["1-Year"], item.returns?.["3-Year"], item.returns?.["5-Year"], item.returns?.["10-Year"]]), colorscale: [[0,"#fecaca"],[.45,"#fef3c7"],[.5,"#f8fafc"],[.55,"#d1fae5"],[1,"#10b981"]], zmid: 0, marker: { line: { color: "#d5dce8", width: .8 } }, hovertemplate: "<b>%{text}</b> · %{customdata[0]}<br>YTD %{customdata[1]:.1f}%<br>1Y %{customdata[2]:.1f}%<br>3Y %{customdata[3]:.1f}%<br>5Y %{customdata[4]:.1f}%<br>10Y %{customdata[5]:.1f}%<extra></extra>", colorbar: { title: "1Y in BTC", ticksuffix: "%", thickness: 12 } };
-    await Plotly.newPlot(map, [trace], { margin: { t: 5, r: 5, b: 5, l: 5 }, geo: { projection: { type: "natural earth", scale: 1.05 }, showframe: false, showcoastlines: false, showcountries: true, countrycolor: "#d5dce8", showland: true, landcolor: "#f5f7fb", bgcolor: "transparent" }, paper_bgcolor: "transparent", dragmode: "pan" }, { responsive: true, displayModeBar: false, scrollZoom: true });
+    const trace = { type: "choropleth", locationmode: "ISO-3", locations: items.map((item) => item.iso3), z: items.map((item) => item.returns?.["1-Year"]), text: items.map((item) => item.name), customdata: items.map((item) => [item.key, item.symbol, item.returns?.YTD, item.returns?.["1-Year"], item.returns?.["3-Year"], item.returns?.["5-Year"], item.returns?.["10-Year"]]), colorscale: [[0,"#fecaca"],[.45,"#fef3c7"],[.5,"#f8fafc"],[.55,"#d1fae5"],[1,"#10b981"]], zmid: 0, marker: { line: { color: "#d5dce8", width: .8 } }, hovertemplate: "<b>%{text}</b> · %{customdata[1]}<br>YTD %{customdata[2]:.1f}%<br>1Y %{customdata[3]:.1f}%<br>3Y %{customdata[4]:.1f}%<br>5Y %{customdata[5]:.1f}%<br>10Y %{customdata[6]:.1f}%<extra></extra>", colorbar: { title: "1Y in BTC", ticksuffix: "%", thickness: 12 } };
+    const compactLabels = new Set(["Australia", "Brazil", "Canada", "China", "Japan", "South Korea", "United Kingdom", "United States"]);
+    const labelText = () => items.map((item) => window.innerWidth < 760 && !compactLabels.has(item.name) ? "" : item.name);
+    const labels = { type: "scattergeo", mode: "text", lat: items.map((item) => item.lat), lon: items.map((item) => item.lon), text: labelText(), customdata: items.map((item) => item.key), textfont: { family: "Inter, Arial, sans-serif", size: 11, color: "#172033" }, textposition: "middle center", hoverinfo: "skip", showlegend: false };
+    await Plotly.newPlot(map, [trace, labels], { margin: { t: 5, r: 5, b: 5, l: 5 }, geo: { projection: { type: "natural earth", scale: 1.05 }, showframe: false, showcoastlines: false, showcountries: true, countrycolor: "#d5dce8", showland: true, landcolor: "#f5f7fb", bgcolor: "transparent" }, paper_bgcolor: "transparent", dragmode: "pan" }, { responsive: true, displayModeBar: false, scrollZoom: true });
+    map.on("plotly_click", (event) => { const point = event.points?.[0]; const key = point?.data?.type === "scattergeo" ? point.customdata : point?.customdata?.[0]; if (key) location.href = `asset-class.html?group=countries&key=${encodeURIComponent(key)}`; });
+    window.addEventListener("resize", () => Plotly.restyle(map, { text: [labelText()] }, [1]));
     const adjust = (delta) => { const current = map.layout?.geo?.projection?.scale || 1.05; Plotly.relayout(map, { "geo.projection.scale": Math.max(.9, Math.min(4, current + delta)) }); };
     document.getElementById("countriesZoomIn")?.addEventListener("click", () => adjust(.2)); document.getElementById("countriesZoomOut")?.addEventListener("click", () => adjust(-.2));
   } catch (error) { rows.innerHTML = `<tr><td colspan="6" class="error-cell"></td></tr>`; rows.querySelector("td").textContent = error.message; source.textContent = error.message; source.classList.add("is-error"); }
@@ -622,7 +698,7 @@ function renderPortfolioResults(payload) {
 
 function initPortfolio() {
   const form = document.getElementById("portfolioForm"); if (!form) return;
-  addPortfolioHoldingRow("SPY", "60"); addPortfolioHoldingRow("QQQ", "40");
+  addPortfolioHoldingRow("SPY", "60"); addPortfolioHoldingRow("IEF", "40");
   const start = document.getElementById("portfolioStartDate"); const yesterday = new Date(Date.now() - 86400000); start.max = yesterday.toISOString().slice(0, 10);
   document.getElementById("addPortfolioHolding").addEventListener("click", () => addPortfolioHoldingRow());
   const builder = document.getElementById("portfolioBuilder"); const toggle = document.getElementById("portfolioConfigToggle");

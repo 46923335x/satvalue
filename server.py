@@ -10,29 +10,43 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from http import HTTPStatus
+from http.cookiejar import CookieJar
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from math import sqrt
 from pathlib import Path
 from statistics import stdev
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.parse import parse_qs, quote, urlencode, urlparse
+from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 
 ROOT = Path(__file__).resolve().parent
 ALPACA_DATA_URL = "https://data.alpaca.markets"
+ALPACA_TRADING_URL = "https://paper-api.alpaca.markets"
 COIN_METRICS_DATA_URL = "https://community-api.coinmetrics.io/v4"
 COINBASE_EXCHANGE_URL = "https://api.exchange.coinbase.com"
+NASDAQ_PROFILE_URL = "https://api.nasdaq.com/api/company"
+MORNINGSTAR_URL = "https://www.morningstar.com"
 CACHE_SECONDS = 300
 FUND_CACHE_SECONDS = 6 * 60 * 60
 RANKING_CACHE_SECONDS = 15 * 60
+ASSET_CACHE_SECONDS = 24 * 60 * 60
 SYMBOL_PATTERN = re.compile(r"^[A-Z][A-Z0-9.-]{0,9}$")
+SYMBOL_ALIASES = {"FB": "META"}
+ETF_STRATEGY_PREFIXES = {
+    "VTV": "The investment seeks to track the performance of the CRSP U.S. Large Cap Value Index that measures the investment return of large-capitalization value stocks.",
+}
+MORNINGSTAR_STOCK_PROFILE_FALLBACKS = {
+    "AAPL": "Apple is among the largest companies in the world, with a broad portfolio of hardware and software products targeted at consumers and businesses. Apple’s iPhone accounts for the majority of the firm's sales, and Apple’s other products, such as the Mac, iPad, and Watch, are designed around the iPhone as the focal point of an expansive software ecosystem. Apple has progressively worked to add new applications, such as streaming video, subscription bundles, and augmented reality. The firm designs its own software and semiconductors and works with subcontractors such as Foxconn and TSMC to build its products and chips. Slightly less than half of Apple’s sales come directly through its flagship stores, with the majority coming indirectly through partnerships and distribution.",
+}
 _cache: dict[str, tuple[float, dict]] = {}
 _btc_cache: tuple[float, date, date, list[dict]] | None = None
 _fund_cache: dict[str, tuple[float, dict]] = {}
 _ranking_cache: dict[str, tuple[float, dict]] = {}
 _portfolio_cache: dict[str, tuple[float, dict]] = {}
 _ticker_cache: tuple[float, dict] | None = None
+_asset_cache: dict[str, tuple[float, dict]] = {}
+_profile_cache: dict[str, tuple[float, dict]] = {}
 _provider_state: dict[str, dict] = {}
 _analytics: dict[str, int] = {}
 _cache_lock = threading.Lock()
@@ -210,6 +224,378 @@ def alpaca_headers() -> dict[str, str]:
         "APCA-API-SECRET-KEY": secret_key,
         "User-Agent": "SatValue-local/1.0",
     }
+
+
+def canonical_symbol(symbol: str) -> str:
+    return SYMBOL_ALIASES.get(symbol.strip().upper(), symbol.strip().upper())
+
+
+def alpaca_asset_metadata(symbol: str) -> dict:
+    """Return a cached Alpaca asset record without making chart availability depend on it."""
+    symbol = canonical_symbol(symbol)
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _asset_cache.get(symbol)
+        if cached and now - cached[0] < ASSET_CACHE_SECONDS:
+            return cached[1]
+    request = Request(f"{ALPACA_TRADING_URL}/v2/assets/{quote(symbol)}", headers=alpaca_headers())
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.load(response)
+    except (HTTPError, URLError, ValueError):
+        return {}
+    metadata = {
+        "name": str(payload.get("name") or symbol).strip(),
+        "exchange": payload.get("exchange"),
+        "status": payload.get("status"),
+    }
+    with _cache_lock:
+        _asset_cache[symbol] = (now, metadata)
+    return metadata
+
+
+def summarize_company_description(value: str, max_length: int = 520) -> str:
+    text = re.sub(r"<[^>]+>", " ", unescape(str(value or "")))
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= max_length:
+        return text
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    summary = ""
+    for sentence in sentences[:2]:
+        candidate = f"{summary} {sentence}".strip()
+        if len(candidate) > max_length:
+            break
+        summary = candidate
+    if summary:
+        return summary
+    return text[: max_length - 1].rstrip() + "…"
+
+
+def morningstar_exchange_slug(exchange: str | None) -> str | None:
+    return {
+        "NASDAQ": "xnas",
+        "NYSE": "xnys",
+        "AMEX": "xase",
+        "ARCA": "arcx",
+        "BATS": "bats",
+        "OTC": "pinc",
+    }.get(str(exchange or "").strip().upper())
+
+
+def extract_morningstar_company_description(value: str) -> str:
+    match = re.search(
+        r"<span\b[^>]*\bitemprop=[\"']description[\"'][^>]*>(.*?)</span>",
+        str(value or ""),
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", match.group(1))
+    return re.sub(r"\s+", " ", unescape(text)).strip()
+
+
+def extract_morningstar_etf_strategy(value: str) -> str:
+    match = re.search(
+        r"<div\b[^>]*\bclass=[\"'][^\"']*\bsal-mip-strategy__body\b[^\"']*[\"'][^>]*>(.*?)</div>",
+        str(value or ""),
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", match.group(1))
+    return re.sub(r"\s+", " ", unescape(text)).strip()
+
+
+def _split_javascript_arguments(value: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    quote_char = ""
+    escaped = False
+    depth = 0
+    for index, character in enumerate(value):
+        if quote_char:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote_char:
+                quote_char = ""
+            continue
+        if character in {'"', "'"}:
+            quote_char = character
+        elif character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth -= 1
+        elif character == "," and depth == 0:
+            parts.append(value[start:index].strip())
+            start = index + 1
+    parts.append(value[start:].strip())
+    return parts
+
+
+def extract_morningstar_etf_payload(value: str) -> dict:
+    """Read the short-lived Strategy token and security ID from Nuxt page state."""
+    page = str(value or "")
+    script_match = re.search(r"<script[^>]*>(window\.__NUXT__=\(function\(.*?)</script>", page, flags=re.DOTALL)
+    script = script_match.group(1) if script_match else page
+    function_start = script.find("window.__NUXT__=(function(")
+    parameters_end = script.find("){", function_start)
+    arguments_start = script.rfind("}(")
+    arguments_end = script.rfind("));")
+    if min(function_start, parameters_end, arguments_start, arguments_end) < 0 or arguments_start <= parameters_end:
+        return {}
+    parameters_text = script[function_start + len("window.__NUXT__=(function("):parameters_end]
+    body = script[parameters_end + 2:arguments_start]
+    arguments_text = script[arguments_start + 2:arguments_end]
+    payload_match = re.search(
+        r"strategy:\{.*?payload:\{.*?contentType:(?P<content_type>[A-Za-z_$][\w$]*),token:(?P<token>[A-Za-z_$][\w$]*)\}",
+        body,
+        flags=re.DOTALL,
+    )
+    security_match = re.search(r"securityID:(?P<security_id>[A-Za-z_$][\w$]*)", body)
+    if not payload_match or not security_match:
+        return {}
+    parameters = [item.strip() for item in parameters_text.split(",")]
+    arguments = _split_javascript_arguments(arguments_text)
+    if len(parameters) != len(arguments):
+        return {}
+    values = dict(zip(parameters, arguments))
+
+    def decoded(name: str) -> str:
+        literal = values.get(name, "")
+        try:
+            result = json.loads(literal)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+        return result if isinstance(result, str) else ""
+
+    return {
+        "securityId": decoded(security_match.group("security_id")),
+        "contentType": decoded(payload_match.group("content_type")),
+        "token": decoded(payload_match.group("token")),
+    }
+
+
+def extract_morningstar_strategy_response(value) -> str:
+    """Find the descriptive Strategy text in a Morningstar SAL response."""
+    candidates: list[tuple[int, str]] = []
+
+    def visit(node, key: str = "") -> None:
+        if isinstance(node, dict):
+            for child_key, child in node.items():
+                visit(child, str(child_key))
+        elif isinstance(node, list):
+            for child in node:
+                visit(child, key)
+        elif isinstance(node, str):
+            text = re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", node))).strip()
+            if len(text) >= 60 and any(term in key.lower() for term in ("strategy", "objective", "description")):
+                candidates.append((len(text), text))
+
+    visit(value)
+    return max(candidates, default=(0, ""))[1]
+
+
+def morningstar_etf_strategy(page: str, source_url: str, headers: dict) -> str:
+    payload = extract_morningstar_etf_payload(page)
+    if not payload.get("securityId") or not payload.get("token"):
+        return ""
+    params = urlencode({
+        "languageId": "en",
+        "locale": "en-US",
+        "clientId": "MDC",
+        "component": "sal-mip-strategy",
+        "version": "3.23.13",
+    })
+    strategy_url = (
+        "https://www.us-api.morningstar.com/sal/sal-service/"
+        f"morningstarTake/investmentStrategy/{quote(payload['securityId'])}/data?{params}"
+    )
+    request_headers = {
+        **headers,
+        "Accept": "application/json",
+        "Authorization": f"Bearer {payload['token']}",
+        "Origin": MORNINGSTAR_URL,
+        "Referer": source_url,
+    }
+    try:
+        with urlopen(Request(strategy_url, headers=request_headers), timeout=15) as response:
+            strategy_payload = json.load(response)
+    except (HTTPError, URLError, ValueError, TypeError, json.JSONDecodeError):
+        return ""
+    return extract_morningstar_strategy_response(strategy_payload)
+
+
+def issuer_fund_profile(item: dict) -> dict:
+    """Return a fund issuer's public page description as a non-Morningstar fallback."""
+    source_url = str(item.get("issuerUrl") or "").strip()
+    if not source_url:
+        return {}
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/139 Safari/537.36",
+    }
+    try:
+        with urlopen(Request(source_url, headers=headers), timeout=12) as response:
+            page = response.read(1_500_000).decode("utf-8", "replace")
+    except (HTTPError, URLError, ValueError, TypeError):
+        return {}
+    match = re.search(
+        r"<meta\b(?=[^>]*\bname=[\"']description[\"'])(?=[^>]*\bcontent=[\"'](?P<description>.*?)[\"'])[^>]*>",
+        page,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    description = re.sub(r"\s+", " ", unescape(match.group("description"))).strip() if match else ""
+    if len(description) < 40:
+        return {}
+    issuer = str(item.get("issuer") or "Fund issuer").strip()
+    return {"description": description, "source": f"{issuer} fund profile", "sourceUrl": source_url}
+
+
+def extract_yahoo_etf_description(value: dict) -> str:
+    try:
+        description = value["quoteSummary"]["result"][0]["summaryProfile"]["longBusinessSummary"]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    return re.sub(r"\s+", " ", unescape(str(description or ""))).strip()
+
+
+def yahoo_security_profile(symbol: str, security_kind: str = "ETF") -> dict:
+    """Return a full security profile fallback when Morningstar blocks server access."""
+    symbol = canonical_symbol(symbol)
+    security_kind = "ETF" if security_kind.upper() == "ETF" else "company"
+    now = time.monotonic()
+    cache_key = f"yahoo-{security_kind.lower()}:{symbol}"
+    with _cache_lock:
+        cached = _profile_cache.get(cache_key)
+        if cached and now - cached[0] < ASSET_CACHE_SECONDS:
+            return cached[1]
+    headers = {
+        "Accept": "application/json,text/plain,*/*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/139 Safari/537.36",
+    }
+    cookie_jar = CookieJar()
+    opener = build_opener(HTTPCookieProcessor(cookie_jar))
+    profile = {}
+    try:
+        try:
+            opener.open(Request("https://fc.yahoo.com", headers=headers), timeout=8).read(1)
+        except HTTPError:
+            # Yahoo intentionally returns an HTTP error while setting the consent cookie.
+            pass
+        with opener.open(Request("https://query2.finance.yahoo.com/v1/test/getcrumb", headers=headers), timeout=8) as response:
+            crumb = response.read(256).decode("utf-8", "replace").strip()
+        request_url = (
+            f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{quote(symbol)}?"
+            + urlencode({"modules": "summaryProfile", "crumb": crumb})
+        )
+        with opener.open(Request(request_url, headers=headers), timeout=10) as response:
+            description = extract_yahoo_etf_description(json.load(response))
+        if description:
+            prefix = ETF_STRATEGY_PREFIXES.get(symbol, "") if security_kind == "ETF" else ""
+            if prefix and not description.lower().startswith(prefix.lower()):
+                description = f"{prefix} {description}"
+            profile = {
+                "description": description,
+                "source": f"Yahoo Finance {security_kind} profile",
+                "sourceUrl": f"https://finance.yahoo.com/quote/{quote(symbol)}/profile/",
+            }
+    except (HTTPError, URLError, ValueError, TypeError, json.JSONDecodeError):
+        profile = {}
+    with _cache_lock:
+        _profile_cache[cache_key] = (now, profile)
+    return profile
+
+
+def cached_morningstar_stock_profile(symbol: str, exchange: str | None) -> dict:
+    description = MORNINGSTAR_STOCK_PROFILE_FALLBACKS.get(canonical_symbol(symbol), "")
+    exchange_slug = morningstar_exchange_slug(exchange)
+    if not description or not exchange_slug:
+        return {}
+    return {
+        "description": description,
+        "source": "Morningstar company profile (cached)",
+        "sourceUrl": f"{MORNINGSTAR_URL}/stocks/{exchange_slug}/{quote(canonical_symbol(symbol).lower())}/quote",
+    }
+
+
+def morningstar_company_profile(symbol: str, exchange: str | None, prefer_etf: bool = False) -> dict:
+    """Return Morningstar's company profile or ETF strategy when available."""
+    symbol = canonical_symbol(symbol)
+    exchange_slug = morningstar_exchange_slug(exchange)
+    if not exchange_slug:
+        return {}
+    now = time.monotonic()
+    cache_key = f"morningstar:{exchange_slug}:{symbol}"
+    with _cache_lock:
+        cached = _profile_cache.get(cache_key)
+        cache_lifetime = ASSET_CACHE_SECONDS if cached and cached[1] else CACHE_SECONDS
+        if cached and now - cached[0] < cache_lifetime:
+            return cached[1]
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    }
+    profile = {}
+    candidates = [
+        ("etfs", extract_morningstar_etf_strategy, "Morningstar ETF strategy"),
+    ] if prefer_etf else [
+        ("stocks", extract_morningstar_company_description, "Morningstar company profile"),
+    ]
+    for security_type, extractor, source in candidates:
+        source_url = f"{MORNINGSTAR_URL}/{security_type}/{exchange_slug}/{quote(symbol.lower())}/quote"
+        try:
+            with urlopen(Request(source_url, headers=headers), timeout=15) as response:
+                page = response.read(2_000_000).decode("utf-8", "replace")
+            description = extractor(page)
+            if security_type == "etfs" and not description:
+                description = morningstar_etf_strategy(page, source_url, headers)
+        except (HTTPError, URLError, ValueError, TypeError):
+            description = ""
+        if description:
+            profile = {"description": description, "source": source, "sourceUrl": source_url}
+            break
+    with _cache_lock:
+        _profile_cache[cache_key] = (now, profile)
+    return profile
+
+
+def nasdaq_company_profile(symbol: str) -> dict:
+    """Return a short, cached public company description from Nasdaq when available."""
+    symbol = canonical_symbol(symbol)
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _profile_cache.get(symbol)
+        if cached and now - cached[0] < ASSET_CACHE_SECONDS:
+            return cached[1]
+    request = Request(
+        f"{NASDAQ_PROFILE_URL}/{quote(symbol)}/company-profile",
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+            "Origin": "https://www.nasdaq.com",
+            "Referer": "https://www.nasdaq.com/",
+        },
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.load(response)
+        data = payload.get("data") or {}
+        description = summarize_company_description((data.get("CompanyDescription") or {}).get("value"))
+        profile = {
+            "description": description,
+            "source": "Nasdaq company profile",
+            "sourceUrl": f"https://www.nasdaq.com/market-activity/stocks/{symbol.lower()}/company-profile",
+        } if description else {}
+    except (HTTPError, URLError, ValueError, TypeError):
+        profile = {}
+    with _cache_lock:
+        _profile_cache[symbol] = (now, profile)
+    return profile
 
 
 def alpaca_pages(path: str, params: dict[str, str], symbol: str) -> list[dict]:
@@ -503,6 +889,37 @@ def calendar_returns(series: list[dict]) -> list[dict]:
     return list(reversed(rows))
 
 
+def monthly_calendar_returns(series: list[dict], years: int = 5) -> list[dict]:
+    """Return month-by-month and YTD BTC-denominated returns for a calendar quilt."""
+    month_end: dict[tuple[int, int], dict] = {}
+    year_end: dict[int, dict] = {}
+    for point in series:
+        point_date = date.fromisoformat(point["time"])
+        month_end[(point_date.year, point_date.month)] = point
+        year_end[point_date.year] = point
+    if not year_end:
+        return []
+    latest_year = max(year_end)
+    first_display_year = max(min(year_end), latest_year - max(1, years) + 1)
+    rows = []
+    for year in range(latest_year, first_display_year - 1, -1):
+        month_values = []
+        for month in range(1, 13):
+            current = month_end.get((year, month))
+            previous_key = (year - 1, 12) if month == 1 else (year, month - 1)
+            previous = month_end.get(previous_key)
+            value = None
+            if current and previous:
+                value = (float(current["close"]) / float(previous["close"]) - 1.0) * 100.0
+            month_values.append(value)
+        prior_year = year_end.get(year - 1)
+        ytd = None
+        if year_end.get(year) and prior_year:
+            ytd = (float(year_end[year]["close"]) / float(prior_year["close"]) - 1.0) * 100.0
+        rows.append({"year": year, "months": month_values, "ytd": ytd})
+    return rows
+
+
 def rolling_returns(series: list[dict], months: int = 12) -> list[dict]:
     """Return rolling cumulative returns using the last observation on or before each target."""
     if not series:
@@ -761,24 +1178,62 @@ def cached_portfolio_payload(payload: dict) -> dict:
 
 
 def security_metadata(symbol: str) -> dict:
+    symbol = canonical_symbol(symbol)
     if symbol == "BTCUSD":
         return {"name": "Bitcoin", "proxy": "BTC/USD", "dataStartDate": "2015-07-20", "issuer": "Coinbase Exchange", "issuerUrl": "https://exchange.coinbase.com/trade/BTC-USD"}
-    if symbol == "SPY":
-        return {"name": "S&P 500", "proxy": "SPY", "inceptionDate": "1993-01-22", "issuer": "State Street", "issuerUrl": "https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy"}
+    asset = alpaca_asset_metadata(symbol)
+    asset_name = str(asset.get("name") or "")
     registered = REGISTRY_BY_SYMBOL.get(symbol)
+    prefer_etf = bool(registered) or any(term in asset_name.lower() for term in (" etf", " fund", " trust"))
+    if prefer_etf:
+        profile = (
+            morningstar_company_profile(symbol, asset.get("exchange"), prefer_etf=True)
+            or yahoo_security_profile(symbol, "ETF")
+            or (issuer_fund_profile(registered) if registered else {})
+            or nasdaq_company_profile(symbol)
+        )
+    else:
+        profile = (
+            morningstar_company_profile(symbol, asset.get("exchange"))
+            or cached_morningstar_stock_profile(symbol, asset.get("exchange"))
+            or yahoo_security_profile(symbol, "company")
+            or nasdaq_company_profile(symbol)
+        )
+    if symbol == "SPY":
+        return {
+            "name": "S&P 500", "proxy": "SPY", "inceptionDate": "1993-01-22", "issuer": "State Street",
+            "issuerUrl": "https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy",
+            "exchange": asset.get("exchange"), "description": profile.get("description"),
+            "profileSource": profile.get("source"), "profileSourceUrl": profile.get("sourceUrl"),
+        }
     if registered:
         return {
-            "name": registered["name"],
+            "name": asset.get("name") or registered["name"],
             "proxy": symbol,
             "inceptionDate": registered.get("inceptionDate"),
             "dataStartDate": registered.get("dataStartDate"),
             "issuer": registered.get("issuer", "State Street" if symbol.startswith("XL") else None),
             "issuerUrl": registered.get("issuerUrl"),
+            "exchange": asset.get("exchange"),
+            "description": profile.get("description"),
+            "profileSource": profile.get("source"),
+            "profileSourceUrl": profile.get("sourceUrl"),
         }
-    return {"name": symbol, "proxy": symbol, "inceptionDate": None, "issuer": None, "issuerUrl": None}
+    return {
+        "name": asset.get("name") or symbol,
+        "proxy": symbol,
+        "inceptionDate": None,
+        "issuer": None,
+        "issuerUrl": None,
+        "exchange": asset.get("exchange"),
+        "description": profile.get("description"),
+        "profileSource": profile.get("source"),
+        "profileSourceUrl": profile.get("sourceUrl"),
+    }
 
 
 def fetch_research_payload(symbol: str) -> dict:
+    symbol = canonical_symbol(symbol)
     now = datetime.now(timezone.utc)
     today = now.date()
     last_complete_date = today - timedelta(days=1)
@@ -796,7 +1251,7 @@ def fetch_research_payload(symbol: str) -> dict:
             "symbol": symbol, "security": security_metadata(symbol), "benchmark": "BTC/USD", "source": source,
             "feed": "daily UTC reference", "chartType": "line", "asOf": series[-1]["time"], "bars": series,
             "trailingReturns": trailing_returns(series), "metrics": {key: value for key, value in metrics.items() if key != "drawdowns"},
-            "drawdowns": metrics["drawdowns"], "calendarReturns": calendar_returns(series), "availableStart": series[0]["time"],
+            "drawdowns": metrics["drawdowns"], "calendarReturns": calendar_returns(series), "monthlyCalendarReturns": monthly_calendar_returns(series), "availableStart": series[0]["time"],
             "availableEnd": series[-1]["time"], "stale": False, "cacheTtlSeconds": CACHE_SECONDS,
         }
     common = {
@@ -832,7 +1287,7 @@ def fetch_research_payload(symbol: str) -> dict:
         "symbol": symbol,
         "security": security_metadata(symbol),
         "benchmark": f"BTC/USD ({btc_source})",
-        "source": f"Alpaca SIP equities + {btc_source}",
+        "source": f"Alpaca SIP adjusted equities + {btc_source}",
         "feed": reference_type,
         "chartType": chart_type,
         "asOf": series[-1]["time"],
@@ -841,6 +1296,7 @@ def fetch_research_payload(symbol: str) -> dict:
         "metrics": {key: value for key, value in metrics.items() if key != "drawdowns"},
         "drawdowns": metrics["drawdowns"],
         "calendarReturns": calendar_returns(series),
+        "monthlyCalendarReturns": monthly_calendar_returns(series),
         "availableStart": series[0]["time"],
         "availableEnd": series[-1]["time"],
         "stale": (last_complete_date - date.fromisoformat(series[-1]["time"])).days > 4,
@@ -901,7 +1357,7 @@ def fetch_market_ticker_payload() -> dict:
         raise MarketDataError("Market ticker data is unavailable.")
     return {
         "items": items,
-        "source": f"Alpaca SIP equities + {btc_source}",
+        "source": f"Alpaca SIP adjusted equities + {btc_source}",
         "asOf": min(item["asOf"] for item in items),
         "cacheTtlSeconds": CACHE_SECONDS,
     }
@@ -982,7 +1438,7 @@ def fetch_group_payload(group: str) -> dict:
         "group": group,
         "registryVersion": REGISTRY_VERSION,
         "asOf": common_as_of,
-        "source": f"Alpaca SIP equities + {btc_source}",
+        "source": f"Alpaca SIP adjusted equities + {btc_source}",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "cacheTtlSeconds": RANKING_CACHE_SECONDS,
         "stale": (last_complete_date - date.fromisoformat(common_as_of)).days > 4,
@@ -1199,7 +1655,8 @@ class SatValueHandler(SimpleHTTPRequestHandler):
                 self.send_json({"error": "Fund details could not be loaded."}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if parsed.path == "/api/series":
-            symbol = parse_qs(parsed.query).get("symbol", ["SPY"])[0].strip().upper()
+            requested_symbol = parse_qs(parsed.query).get("symbol", ["SPY"])[0].strip().upper()
+            symbol = canonical_symbol(requested_symbol)
             if not SYMBOL_PATTERN.fullmatch(symbol):
                 self.send_json({"error": "Enter a valid US stock or ETF symbol."}, HTTPStatus.BAD_REQUEST)
                 return

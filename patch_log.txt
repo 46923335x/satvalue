@@ -1,0 +1,18 @@
+SatValue Change List:
+
+V1 - Live site wiring data from alpaca
+
+v1.0.1
+Countries Tab - change page default sort to alphabetical
+Countries Tab - add country names to picture to mirror portfoliovisualizer
+Asset Classes - Remove the text that says "This page represents" text.
+Asset Classes & Countries - remove the drawdown pane and change the calender returns tab to a simple calendar quilt with months and ytd at the right. show the last 5 years. make sure the width spans across so that it looks good. Color code it red / green shaded like excel has where the biggest gain is the darkest green and the biggest loss is the darkest red.
+Sectors Tab - change default sort to alphabetical
+Asset Classes - same thing alphabetical
+Portfolio tab - make the default port 60/40 SPY/IEF with annual rebalancing and VTI as the benchmark.
+all cumulative trailing returns charts SPY/BTC (right column) are aligned left instead of right. fix this.
+Why Bitcoin Page - the first paragraph font isn't the same size as the other ones. Also its centered narrowly instead of stretching across the horizontal line that appears under the page subtitle that says "Every price is a ratio. Changing the unit of account changes the story that price tells."
+Why Bitcoin Page - "USD per dollar" should not say this because that's redundant. also it should use fraction layout on this page so it becomes obvious that the numerator and denominator cancel out when you get stock price / btc.
+What is kS? page - that should start with satoshis since that is known and explain very briefly why we choose 1 thousand satoshis -> 1k Sats -> 1kS -> kS because of the small decimal issue that's already explained on the page.
+individual pages when you search for a stock. like "FB" for example, it should display the name of the stock at the top left instead the header information. also fb appears to have a 50% drop in a single day which may be a split or something. therefore it makes me think that the alpaca data isn't adjusted close and is just raw close not corrected for splits and dividends and such. if it is concluded that these are not a problem then there is nothing to correct.
+bar charts - 10y and max should use monthly bars so that the bars aren't tiny.

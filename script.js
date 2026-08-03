@@ -138,7 +138,7 @@ function initUnitGuideLink() {
   const navLeft = document.querySelector(".nav-left");
   if (!navLeft || navLeft.querySelector(".nav-education")) return;
   const education = document.createElement("div"); education.className = "nav-education"; education.setAttribute("aria-label", "About SatValue");
-  const links = [["Why Bitcoin", "why-bitcoin.html"], ["What is kS?", "ks.html"]];
+  const links = [["Why Bitcoin?", "why-bitcoin.html"], ["What is kS?", "ks.html"]];
   links.forEach(([label, href]) => {
     const link = document.createElement("a"); link.href = href; link.textContent = label;
     if (location.pathname.endsWith(`/${href}`) || location.pathname.endsWith(href)) link.classList.add("is-current");
@@ -395,7 +395,9 @@ async function initResearchChart() {
       timeframeRow.querySelectorAll("[data-range]").forEach((button) => { const selected = button.dataset.range === range; button.classList.toggle("is-active", selected); button.setAttribute("aria-pressed", String(selected)); });
       chartRange.textContent = `${active[from].time} to ${active[to].time}`;
     }
-    chart.subscribeCrosshairMove((param) => { const point = param.seriesData?.get(series); if (point && chartValue) chartValue.textContent = formatPercent(shown(point), 2); });
+    const restoreHorizonValue = () => { if (chartValue && current.length) chartValue.textContent = formatPercent(shown(current[current.length - 1]), 2); };
+    chart.subscribeCrosshairMove((param) => { const point = param.seriesData?.get(series); if (point && chartValue) chartValue.textContent = formatPercent(shown(point), 2); else restoreHorizonValue(); });
+    container.addEventListener("mouseleave", restoreHorizonValue);
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => { if (!range || suppress || rebasing) return; const index = Math.max(0, Math.min(active.length - 1, Math.floor(range.from))); if (index === lastBase) return; rebasing = true; rebase(index); chart.timeScale().setVisibleLogicalRange(range); rebasing = false; });
     timeframeRow.addEventListener("click", (event) => { const button = event.target.closest("[data-range]"); if (button) applyRange(button.dataset.range); });
     timeframeRow.addEventListener("keydown", (event) => { if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return; const buttons = [...timeframeRow.querySelectorAll("button")]; const index = buttons.indexOf(document.activeElement); if (index < 0) return; event.preventDefault(); buttons[(index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length].focus(); });
@@ -583,7 +585,7 @@ function createPortfolioChart(container, definitions, formatter, options = {}) {
     width: container.clientWidth, height: container.clientHeight,
     layout: { background: { type: "solid", color: "transparent" }, textColor: "#64748b" },
     grid: { vertLines: { color: "rgba(15,23,42,.05)" }, horzLines: { color: "rgba(15,23,42,.05)" } },
-    rightPriceScale: { borderVisible: false, mode: options.logarithmic ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal }, timeScale: { borderVisible: false }, handleScroll: { vertTouchDrag: false }
+    rightPriceScale: { borderVisible: false, mode: options.logarithmic ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal }, timeScale: { borderVisible: false, minBarSpacing: .05, rightOffset: 0 }, handleScroll: { vertTouchDrag: false }
   });
   definitions.forEach((definition) => {
     const commonOptions = { lineWidth: definition.width || 2, priceLineVisible: false, lastValueVisible: true, priceFormat: { type: "custom", formatter } };
@@ -606,6 +608,28 @@ function createPortfolioChart(container, definitions, formatter, options = {}) {
 
 function valueSeries(rows, key, multiplier = 1) {
   return rows.map((row) => ({ time: row.time, value: Number(row[key]) * multiplier })).filter((point) => Number.isFinite(point.value));
+}
+
+function portfolioRangeStart(range, data) {
+  if (!data.length || range === "MAX") return data[0]?.time;
+  const end = new Date(`${data[data.length - 1].time}T00:00:00Z`); const start = new Date(end);
+  if (range === "YTD") start.setUTCMonth(0, 1);
+  else if (range === "1W") start.setUTCDate(start.getUTCDate() - 7);
+  else { const months = { "1M": 1, "3M": 3, "6M": 6, "1Y": 12, "3Y": 36, "5Y": 60, "10Y": 120 }[range] || 0; start.setUTCMonth(start.getUTCMonth() - months); }
+  const target = start.toISOString().slice(0, 10);
+  return data.find((point) => point.time >= target)?.time || data[0].time;
+}
+
+function bindPortfolioGrowthRange(chart, data, selectedRange = "MAX", onSelect = () => {}) {
+  const original = document.getElementById("portfolioGrowthTimeframeRow"); if (!original || !data.length) return;
+  const row = original.cloneNode(true); original.replaceWith(row);
+  const apply = (range) => {
+    chart.timeScale().setVisibleRange({ from: portfolioRangeStart(range, data), to: data[data.length - 1].time });
+    row.querySelectorAll("[data-range]").forEach((button) => { const active = button.dataset.range === range; button.classList.toggle("is-active", active); button.setAttribute("aria-pressed", String(active)); }); onSelect(range);
+  };
+  row.addEventListener("click", (event) => { const button = event.target.closest("[data-range]"); if (button) apply(button.dataset.range); });
+  row.addEventListener("keydown", (event) => { if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return; const buttons = [...row.querySelectorAll("button")]; const index = buttons.indexOf(document.activeElement); if (index < 0) return; event.preventDefault(); buttons[(index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length].focus(); });
+  apply(selectedRange);
 }
 
 function portfolioHeaderRow(containerId, firstLabel, portfolioName, benchmarks) {
@@ -684,13 +708,15 @@ function renderPortfolioResults(payload) {
   const results = document.getElementById("portfolioResults"); results.hidden = false;
   const portfolioName = document.getElementById("portfolioName").value.trim() || "Portfolio"; const last = rows[rows.length - 1]; const metrics = payload.metrics || {};
   document.getElementById("portfolioResultsTitle").textContent = `Portfolio Analysis Results (${formatDate(payload.effectiveStart)} – ${formatDate(payload.availableEnd)})`;
+  const relativeResult = ((Number(last.portfolioBtc) / Number(rows[0].portfolioBtc)) - 1) * 100; const opportunity = document.getElementById("portfolioOpportunityCost");
+  if (Number.isFinite(relativeResult)) opportunity.textContent = Math.abs(relativeResult) < .05 ? "Your portfolio has kept pace with simply holding BTC" : relativeResult < 0 ? `Your portfolio has lost ${Math.abs(relativeResult).toFixed(0)}% versus simply holding BTC` : `Your portfolio has gained ${relativeResult.toFixed(0)}% versus simply holding BTC`;
   document.getElementById("portfolioSource").textContent = `${payload.source} · ${payload.rebalancing} rebalancing · latest shared observation ${formatDate(payload.asOf)}`;
   renderPortfolioAnnualized(payload); document.getElementById("portfolioVolatilityBtc").textContent = formatPlainPercent(metrics.portfolioVsBtc?.annualizedVolatility); document.getElementById("portfolioDrawdownBtc").textContent = formatPlainPercent(Math.abs(Number(metrics.portfolioVsBtc?.maxDrawdown)));
   document.getElementById("portfolioGrowthSummary").textContent = `${formatBitcoin(rows[0].portfolioBtc)} invested at the effective start would be worth ${formatBitcoin(last.portfolioBtc)} at the end of the selected period.`;
   renderPortfolioAllocation(payload, portfolioName); renderPortfolioPerformance(payload, rows[0], last, portfolioName);
   const growthDefinitions = [
     { data: valueSeries(rows, "portfolioBtc"), color: "#2563eb", width: 3 }
-  ]; const growthContainer = document.getElementById("portfolioGrowthChart"); const logScale = document.getElementById("portfolioLogScale"); const drawGrowth = () => createPortfolioChart(growthContainer, growthDefinitions, (value) => `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} BTC`, { logarithmic: logScale.checked }); logScale.onchange = drawGrowth; drawGrowth();
+  ]; const growthContainer = document.getElementById("portfolioGrowthChart"); const logScale = document.getElementById("portfolioLogScale"); let growthRange = "MAX"; const drawGrowth = () => { const chart = createPortfolioChart(growthContainer, growthDefinitions, (value) => `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} BTC`, { logarithmic: logScale.checked }); bindPortfolioGrowthRange(chart, growthDefinitions[0].data, growthRange, (range) => { growthRange = range; }); }; logScale.onchange = drawGrowth; drawGrowth();
   createPortfolioChart(document.getElementById("portfolioRollingChart"), [{ data: (payload.rollingReturns || []).map((point) => ({ time: point.time, value: Number(point.value) })), baseline: true, baseValue: 0, zeroLine: true, topColor: "#059669", bottomColor: "#dc2626", width: 2 }], (value) => `${Number(value).toFixed(1)}%`);
   renderPortfolioTables(payload, portfolioName); document.getElementById("portfolioMethodology").textContent = payload.methodology;
   const warnings = document.getElementById("portfolioWarnings"); const messages = (payload.warnings || []).length ? payload.warnings : [`Note: The analysis period begins on ${formatDate(payload.effectiveStart)}, the first shared completed observation for all selected assets and benchmarks.`]; warnings.replaceChildren(...messages.map((message) => { const p = document.createElement("p"); p.textContent = message; return p; }));
